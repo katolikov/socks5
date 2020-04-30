@@ -7,7 +7,9 @@
 Неудачно сделал добавление репо с помощью `git push <name> <url>`, все перезаписалось~~
 
 ## Метод установки
-`git clone: https://github.com/katolikov/socks5.git`
+```
+git clone: https://github.com/katolikov/socks5.git
+```
 
 ## Сборка
 ```
