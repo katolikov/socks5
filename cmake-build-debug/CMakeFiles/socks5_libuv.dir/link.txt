@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++  -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/socks5_libuv.dir/main.cpp.o CMakeFiles/socks5_libuv.dir/server.cpp.o  -o socks5_libuv /usr/local/lib/libuv.dylib /usr/lib/libpthread.dylib /usr/lib/libdl.dylib 
