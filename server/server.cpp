@@ -1,7 +1,8 @@
 #include "server.hpp"
 Server::Server():
-        server_get( new uv_tcp_t ),
-        client_req( new uv_stream_t )
+
+    server_get( new uv_tcp_t ),
+    client_req( new uv_stream_t )
 {}
 
 Server::~Server(){
@@ -13,7 +14,7 @@ Server::~Server(){
 }
 
 Server* Server::get_instance(){
-
+	
     static Server server;
     return &server;
 }
@@ -58,7 +59,7 @@ void Server::alloc_client_buffer(uv_handle_t *handle, size_t suggested_size, uv_
 void Server::alloc_server_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
 
     buf->base = new char[suggested_size];
-	buf->len = suggested_size;
+    buf->len = suggested_size;
 }
 
 void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *buf) {
@@ -217,18 +218,17 @@ bool Server::s5_parse_auth(std::string msg){
 
 bool Server::s5_parse_req(std::string msg){
 
-	if((msg[0]== 0x05) && (msg[1]== 0x01) && (msg[3] == 0x01)){
+    if((msg[0]== 0x05) && (msg[1]== 0x01) && (msg[3] == 0x01)){
 
-		Server::transform_ip_port(msg);
-        sleep(1);
-		std::cout << "\033[1;5;34mIP: " << ip_req << "\033[0m\n";
-		std::cout << "\033[1;5;34mPORT: " << port << "\033[0m\n";
-
-		return true;
-	} else{
-	    after_auth_answer[1] = 0x07;
-	    return false;
-	}
+    	Server::transform_ip_port(msg);
+    	sleep(1);
+    	std::cout << "\033[1;5;34mIP: " << ip_req << "\033[0m\n";
+    	std::cout << "\033[1;5;34mPORT: " << port << "\033[0m\n";
+    	return true;
+    } else{
+	after_auth_answer[1] = 0x07;
+	return false;
+    }
 }
 
 void Server::write_after_auth(const std::string& message_second, uv_stream_t *client) {
