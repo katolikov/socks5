@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/c++  -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/Katolik.dir/main.cpp.o CMakeFiles/Katolik.dir/server.cpp.o  -o Katolik  -L/usr/local/Cellar/libuv/1.31.0/lib -Wl,-rpath,/usr/local/Cellar/libuv/1.31.0/lib -luv -lpthread 

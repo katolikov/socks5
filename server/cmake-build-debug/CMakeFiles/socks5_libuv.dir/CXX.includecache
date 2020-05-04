@@ -6,11 +6,17 @@
 
 #IncludeRegexTransform: 
 
-/Users/artemkatolikov/Desktop/socks5_libuv/server.cpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/main.cpp
+iostream
+-
 server.hpp
-/Users/artemkatolikov/Desktop/socks5_libuv/server.hpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/server.hpp
 
-/Users/artemkatolikov/Desktop/socks5_libuv/server.hpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/server.cpp
+server.hpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/server.hpp
+
+/Users/artemkatolikov/Desktop/socks5_libuv/server/server.hpp
 uv.h
 -
 unistd.h
@@ -20,9 +26,9 @@ iostream
 map
 -
 session.hpp
-/Users/artemkatolikov/Desktop/socks5_libuv/session.hpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/session.hpp
 
-/Users/artemkatolikov/Desktop/socks5_libuv/session.hpp
+/Users/artemkatolikov/Desktop/socks5_libuv/server/session.hpp
 uv.h
 -
 map

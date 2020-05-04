@@ -1,4 +1,4 @@
-# Install script for directory: /Users/artemkatolikov/Desktop/socks5_libuv
+# Install script for directory: /Users/artemkatolikov/Desktop/socks5_libuv/server
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -40,5 +40,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

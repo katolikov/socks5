@@ -34,19 +34,19 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /Volumes/ssd/Application/CLion.app/Contents/bin/cmake/mac/bin/cmake
+CMAKE_COMMAND = /Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake
 
 # The command to remove a file.
-RM = /Volumes/ssd/Application/CLion.app/Contents/bin/cmake/mac/bin/cmake -E remove -f
+RM = /Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -E remove -f
 
 # Escaping for special characters.
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/artemkatolikov/Desktop/socks5_libuv
+CMAKE_SOURCE_DIR = /Users/artemkatolikov/Desktop/socks5_libuv/server
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug
+CMAKE_BINARY_DIR = /Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug
 
 # Include any dependencies generated for this target.
 include CMakeFiles/socks5_libuv.dir/depend.make
@@ -59,29 +59,29 @@ include CMakeFiles/socks5_libuv.dir/flags.make
 
 CMakeFiles/socks5_libuv.dir/main.cpp.o: CMakeFiles/socks5_libuv.dir/flags.make
 CMakeFiles/socks5_libuv.dir/main.cpp.o: ../main.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/socks5_libuv.dir/main.cpp.o"
-	/Library/Developer/CommandLineTools/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/socks5_libuv.dir/main.cpp.o -c /Users/artemkatolikov/Desktop/socks5_libuv/main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/socks5_libuv.dir/main.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/socks5_libuv.dir/main.cpp.o -c /Users/artemkatolikov/Desktop/socks5_libuv/server/main.cpp
 
 CMakeFiles/socks5_libuv.dir/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/socks5_libuv.dir/main.cpp.i"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/artemkatolikov/Desktop/socks5_libuv/main.cpp > CMakeFiles/socks5_libuv.dir/main.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/artemkatolikov/Desktop/socks5_libuv/server/main.cpp > CMakeFiles/socks5_libuv.dir/main.cpp.i
 
 CMakeFiles/socks5_libuv.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/socks5_libuv.dir/main.cpp.s"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/artemkatolikov/Desktop/socks5_libuv/main.cpp -o CMakeFiles/socks5_libuv.dir/main.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/artemkatolikov/Desktop/socks5_libuv/server/main.cpp -o CMakeFiles/socks5_libuv.dir/main.cpp.s
 
 CMakeFiles/socks5_libuv.dir/server.cpp.o: CMakeFiles/socks5_libuv.dir/flags.make
 CMakeFiles/socks5_libuv.dir/server.cpp.o: ../server.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/socks5_libuv.dir/server.cpp.o"
-	/Library/Developer/CommandLineTools/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/socks5_libuv.dir/server.cpp.o -c /Users/artemkatolikov/Desktop/socks5_libuv/server.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/socks5_libuv.dir/server.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/socks5_libuv.dir/server.cpp.o -c /Users/artemkatolikov/Desktop/socks5_libuv/server/server.cpp
 
 CMakeFiles/socks5_libuv.dir/server.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/socks5_libuv.dir/server.cpp.i"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/artemkatolikov/Desktop/socks5_libuv/server.cpp > CMakeFiles/socks5_libuv.dir/server.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/artemkatolikov/Desktop/socks5_libuv/server/server.cpp > CMakeFiles/socks5_libuv.dir/server.cpp.i
 
 CMakeFiles/socks5_libuv.dir/server.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/socks5_libuv.dir/server.cpp.s"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/artemkatolikov/Desktop/socks5_libuv/server.cpp -o CMakeFiles/socks5_libuv.dir/server.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/artemkatolikov/Desktop/socks5_libuv/server/server.cpp -o CMakeFiles/socks5_libuv.dir/server.cpp.s
 
 # Object files for target socks5_libuv
 socks5_libuv_OBJECTS = \
@@ -98,7 +98,7 @@ socks5_libuv: /usr/local/lib/libuv.dylib
 socks5_libuv: /usr/lib/libpthread.dylib
 socks5_libuv: /usr/lib/libdl.dylib
 socks5_libuv: CMakeFiles/socks5_libuv.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable socks5_libuv"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable socks5_libuv"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/socks5_libuv.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -111,6 +111,6 @@ CMakeFiles/socks5_libuv.dir/clean:
 .PHONY : CMakeFiles/socks5_libuv.dir/clean
 
 CMakeFiles/socks5_libuv.dir/depend:
-	cd /Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/artemkatolikov/Desktop/socks5_libuv /Users/artemkatolikov/Desktop/socks5_libuv /Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug /Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug /Users/artemkatolikov/Desktop/socks5_libuv/cmake-build-debug/CMakeFiles/socks5_libuv.dir/DependInfo.cmake --color=$(COLOR)
+	cd /Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/artemkatolikov/Desktop/socks5_libuv/server /Users/artemkatolikov/Desktop/socks5_libuv/server /Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug /Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug /Users/artemkatolikov/Desktop/socks5_libuv/server/cmake-build-debug/CMakeFiles/socks5_libuv.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/socks5_libuv.dir/depend
 
