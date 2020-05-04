@@ -1,8 +1,10 @@
+#include <array>
+#include <iomanip>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <boost/asio.hpp>
-#include <boost/context/all.hpp>
+#include <boost/thread.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -14,5 +16,5 @@ class client {
 public:
     static void tcpClient(int num, char *info[]);
 
-    static void boostContextTest();
+    //static void boostContextTest();
 };
