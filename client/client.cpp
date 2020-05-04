@@ -22,18 +22,18 @@ void client::tcpClient(int num, char *info[]) {
         boost::asio::connect(socket, endpoints);
 
         // Get an endpoint for the Boost website. This will be passed to the SOCKS
-        // 4 server. Explicitly specify IPv4 since SOCKS 4 does not support IPv6.
+        // 4 server.
         auto http_endpoint = *resolver.resolve(tcp::v4(), "www.boost.org", "http");
 
-        // Send the request to the SOCKS 4 server.
+        // Send the request to the SOCKS 5 server.
         socks5::request socks_request(socks5::request::connect, http_endpoint, info[3]);
         boost::asio::write(socket, socks_request.buffers());
 
-        // Receive a response from the SOCKS 4 server.
+        // Receive a response from the SOCKS 5 server.
         socks5::reply socks_reply;
         boost::asio::read(socket, socks_reply.buffers());
 
-        // Check whether we successfully negotiated with the SOCKS 4 server.
+        // Check whether we successfully negotiated with the SOCKS 5 server.
         if (!socks_reply.success()) {
             std::cout << "Connection failed.\n";
             std::cout << "status = 0x" << std::hex << socks_reply.status();
