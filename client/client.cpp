@@ -17,9 +17,7 @@ void client::tcpClient(int num, char *info[]) {
 
         tcp::socket socket(io_context);
         boost::asio::connect(socket, endpoints);
-
-        // Get an endpoint for the Boost website. This will be passed to the SOCKS
-        // 5 server.
+        
         auto http_endpoint = *resolver.resolve(tcp::v4(), "ya.ru", "https");
 
         socks5::request_first socks_request_first;
