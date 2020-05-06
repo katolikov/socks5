@@ -4,10 +4,7 @@
 void client::tcpClient(int num, char *info[]) {
     try {
         if (num != 4) {
-            std::cout << "Usage: sync_client <socks4server> <socks4port> <user>\n";
-            std::cout << "Examples:\n";
-            std::cout << "  sync_client 127.0.0.1 1080 chris\n";
-            std::cout << "  sync_client localhost socks chris\n";
+            std::cout << "127.0.0.1\n";
         }
 
         boost::asio::io_context io_context;
@@ -22,21 +19,36 @@ void client::tcpClient(int num, char *info[]) {
         boost::asio::connect(socket, endpoints);
 
         // Get an endpoint for the Boost website. This will be passed to the SOCKS
-        // 4 server.
+        // 5 server.
         auto http_endpoint = *resolver.resolve(tcp::v4(), "www.boost.org", "http");
 
         // Send the request to the SOCKS 5 server.
-        socks5::request socks_request(socks5::request::connect, http_endpoint, info[3]);
-        boost::asio::write(socket, socks_request.buffers());
+
+        socks5::request_first socks_request_first;
+        boost::asio::write(socket, socks_request_first.buffers());
+
+        // Receive a response first from the SOCKS 5 server.
+        socks5::reply_first socks_reply_first;
+
+        boost::asio::read(socket, socks_reply_first.buffers());
+
+        if (!socks_reply_first.success()) {
+            std::cout << "Connection failed.\n";
+            std::cout << "status = 0x" << std::hex << socks_reply_first.status();
+        }
+
+        socks5::request_second socks_request_second(socks5::request_second::connect, http_endpoint,
+                                                    reinterpret_cast<unsigned short &>(info[3]));
+        boost::asio::write(socket, socks_request_second.buffers());
 
         // Receive a response from the SOCKS 5 server.
-        socks5::reply socks_reply;
-        boost::asio::read(socket, socks_reply.buffers());
+        socks5::reply_second socks_reply_second;
+        boost::asio::read(socket, socks_reply_second.buffers());
 
         // Check whether we successfully negotiated with the SOCKS 5 server.
-        if (!socks_reply.success()) {
+        if (!socks_reply_second.success()) {
             std::cout << "Connection failed.\n";
-            std::cout << "status = 0x" << std::hex << socks_reply.status();
+            std::cout << "status = 0x" << std::hex << socks_reply_second.status();
         }
 
         // Form the HTTP request. We specify the "Connection: close" header so that
@@ -52,7 +64,7 @@ void client::tcpClient(int num, char *info[]) {
         boost::asio::write(socket, boost::asio::buffer(request));
 
         // Read until EOF, writing data to output as we go.
-        std::array<char, 512> response;
+        std::array<char, 512> response{};
         boost::system::error_code error;
         while (std::size_t s = socket.read_some(
                 boost::asio::buffer(response), error))

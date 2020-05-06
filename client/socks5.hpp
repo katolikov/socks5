@@ -10,44 +10,69 @@ namespace socks5 {
 
     const unsigned char version = 0x05;
 
-    class request {
+    class request_first {
     public:
+        const unsigned char num = 0x01;
+        const unsigned char type = 0x00;
+
+        request_first() : version_(version),
+                          auth_num_(num),
+                          auth_(type) {}
+
+        std::array<boost::asio::const_buffer, 3> buffers() const {
+            return
+                    {
+                            {
+                                    boost::asio::buffer(&version_, 1),
+                                    boost::asio::buffer(&auth_num_, 1),
+                                    boost::asio::buffer(&auth_, 1)
+                            }
+                    };
+        }
+
+    private:
+        unsigned char version_;
+        unsigned char auth_num_;
+        unsigned char auth_;
+    };
+
+    class request_second {
+    public:
+        const unsigned char addr_type = 0x01;
+
         enum command_type {
             connect = 0x01,
-            bind = 0x02
         };
 
-        request(command_type cmd, const boost::asio::ip::tcp::endpoint &endpoint,
-                const std::string &user_id)
+        request_second(command_type cmd, const boost::asio::ip::tcp::endpoint &endpoint,
+                       unsigned short &port)
                 : version_(version),
                   command_(cmd),
-                  user_id_(user_id),
-                  null_byte_(0) {
+                  null_byte_(0),
+                  type_address_(addr_type) {
             if (endpoint.protocol() != boost::asio::ip::tcp::v4()) {
                 throw boost::system::system_error(
                         boost::asio::error::address_family_not_supported);
             }
 
             // Convert port number to network byte order.
-            unsigned short port = endpoint.port();
+            port = endpoint.port();
             port_high_byte_ = (port >> 8) & 0xff;
-            port_low_byte_ = port & 0xff;
 
             // Save IP address in network byte order.
             address_ = endpoint.address().to_v4().to_bytes();
         }
 
-        std::array<boost::asio::const_buffer, 7> buffers() const {
+        std::array<boost::asio::const_buffer, 10> buffers() const {
             return
                     {
                             {
                                     boost::asio::buffer(&version_, 1),
                                     boost::asio::buffer(&command_, 1),
-                                    boost::asio::buffer(&port_high_byte_, 1),
-                                    boost::asio::buffer(&port_low_byte_, 1),
-                                    boost::asio::buffer(address_),
-                                    boost::asio::buffer(user_id_),
-                                    boost::asio::buffer(&null_byte_, 1)
+                                    boost::asio::buffer(&null_byte_, 1),
+                                    boost::asio::buffer(&type_address_, 1),
+                                    boost::asio::buffer(address_, 4),
+                                    boost::asio::buffer(&port_high_byte_, 2)
                             }
                     };
         }
@@ -55,36 +80,71 @@ namespace socks5 {
     private:
         unsigned char version_;
         unsigned char command_;
-        unsigned char port_high_byte_;
-        unsigned char port_low_byte_;
-        boost::asio::ip::address_v4::bytes_type address_;
-        std::string user_id_;
         unsigned char null_byte_;
+        unsigned char type_address_;
+        boost::asio::ip::address_v4::bytes_type address_;
+        unsigned char port_high_byte_;
     };
 
-    class reply {
+    class reply_first {
     public:
-        enum status_type {
-            request_granted = 0x5a,
-            request_failed = 0x5b,
-            request_failed_no_identd = 0x5c,
-            request_failed_bad_user_id = 0x5d
+        enum auth_ {
+            no_auth = 0x00,
         };
 
-        reply()
-                : null_byte_(0),
+        reply_first()
+                : version_(),
                   status_() {
         }
 
-        std::array<boost::asio::mutable_buffer, 5> buffers() {
+        std::array<boost::asio::mutable_buffer, 2> buffers() {
             return
                     {
                             {
-                                    boost::asio::buffer(&null_byte_, 1),
+                                    boost::asio::buffer(&version_, 1),
                                     boost::asio::buffer(&status_, 1),
-                                    boost::asio::buffer(&port_high_byte_, 1),
-                                    boost::asio::buffer(&port_low_byte_, 1),
-                                    boost::asio::buffer(address_)
+                            }
+                    };
+        }
+
+        bool success() const {
+            return status_ == no_auth;
+        }
+
+        unsigned char status() const {
+            return status_;
+        }
+
+    private:
+        unsigned char version_;
+        unsigned char status_;
+    };
+
+    class reply_second {
+    public:
+        enum status_type {
+            request_granted = 0x00,
+            request_failed = 0x01,
+        };
+
+        reply_second()
+                : version_(),
+                  status_(),
+                  null_byte_(0),
+                  type_addr_() {
+        }
+
+        std::array<boost::asio::mutable_buffer, 10> buffers() {
+            return
+                    {
+                            {
+                                    boost::asio::buffer(&version_, 1),
+                                    boost::asio::buffer(&status_, 1),
+                                    boost::asio::buffer(&null_byte_, 1),
+                                    boost::asio::buffer(&type_addr_, 1),
+                                    boost::asio::buffer(address_, 4),
+                                    boost::asio::buffer(&port_high_byte_, 2),
+
                             }
                     };
         }
@@ -100,7 +160,6 @@ namespace socks5 {
         boost::asio::ip::tcp::endpoint endpoint() const {
             unsigned short port = port_high_byte_;
             port = (port << 8) & 0xff00;
-            port = port | port_low_byte_;
 
             boost::asio::ip::address_v4 address(address_);
 
@@ -108,11 +167,12 @@ namespace socks5 {
         }
 
     private:
-        unsigned char null_byte_;
+        unsigned char version_;
         unsigned char status_;
-        unsigned char port_high_byte_;
-        unsigned char port_low_byte_;
+        unsigned char null_byte_;
+        unsigned char type_addr_;
         boost::asio::ip::address_v4::bytes_type address_;
+        unsigned char port_high_byte_;
     };
 
 } // namespace socks5
