@@ -4,25 +4,23 @@
 void client::tcpClient(int num, char *info[]) {
     try {
         if (num != 4) {
-            std::cout << "127.0.0.1\n";
+            std::cout << "Connect: " << info[1] << ' ' << info[2] << "\n";
         }
 
         boost::asio::io_context io_context;
 
-        // Get a list of endpoints corresponding to the SOCKS 5 server name.
-        tcp::resolver resolver(io_context);
-        auto endpoints = resolver.resolve(info[1], info[2]);
+        std::string ip_addr = info[1];
+        std::string port_num = info[2];
 
-        // Try each endpoint until we successfully establish a connection to the
-        // SOCKS 5 server.
+        tcp::resolver resolver(io_context);
+        auto endpoints = resolver.resolve(ip_addr, port_num);
+
         tcp::socket socket(io_context);
         boost::asio::connect(socket, endpoints);
 
         // Get an endpoint for the Boost website. This will be passed to the SOCKS
         // 5 server.
-        auto http_endpoint = *resolver.resolve(tcp::v4(), "www.boost.org", "http");
-
-        // Send the request to the SOCKS 5 server.
+        auto http_endpoint = *resolver.resolve(tcp::v4(), "ya.ru", "https");
 
         socks5::request_first socks_request_first;
         boost::asio::write(socket, socks_request_first.buffers());
@@ -34,11 +32,10 @@ void client::tcpClient(int num, char *info[]) {
 
         if (!socks_reply_first.success()) {
             std::cout << "Connection failed.\n";
-            std::cout << "status = 0x" << std::hex << socks_reply_first.status();
+            std::cout << socks_reply_first.status();
         }
 
-        socks5::request_second socks_request_second(socks5::request_second::connect, http_endpoint,
-                                                    reinterpret_cast<unsigned short &>(info[3]));
+        socks5::request_second socks_request_second(socks5::request_second::connect, http_endpoint);
         boost::asio::write(socket, socks_request_second.buffers());
 
         // Receive a response from the SOCKS 5 server.
@@ -48,7 +45,7 @@ void client::tcpClient(int num, char *info[]) {
         // Check whether we successfully negotiated with the SOCKS 5 server.
         if (!socks_reply_second.success()) {
             std::cout << "Connection failed.\n";
-            std::cout << "status = 0x" << std::hex << socks_reply_second.status();
+            std::cout << socks_reply_second.status();
         }
 
         // Form the HTTP request. We specify the "Connection: close" header so that
@@ -76,10 +73,6 @@ void client::tcpClient(int num, char *info[]) {
         std::cout << "Exception: " << e.what() << "\n";
     }
 }
-
-
-
-
 
 /*void client::boostContextTest() {
     int a;

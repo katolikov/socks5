@@ -19,6 +19,7 @@ namespace socks5 {
                           auth_num_(num),
                           auth_(type) {}
 
+
         std::array<boost::asio::const_buffer, 3> buffers() const {
             return
                     {
@@ -44,8 +45,7 @@ namespace socks5 {
             connect = 0x01,
         };
 
-        request_second(command_type cmd, const boost::asio::ip::tcp::endpoint &endpoint,
-                       unsigned short &port)
+        request_second(command_type cmd, const boost::asio::ip::tcp::endpoint &endpoint)
                 : version_(version),
                   command_(cmd),
                   null_byte_(0),
@@ -55,8 +55,7 @@ namespace socks5 {
                         boost::asio::error::address_family_not_supported);
             }
 
-            // Convert port number to network byte order.
-            port = endpoint.port();
+            unsigned short port = endpoint.port();
             port_high_byte_ = (port >> 8) & 0xff;
 
             // Save IP address in network byte order.
