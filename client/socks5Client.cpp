@@ -1,9 +1,10 @@
 #include "spawn.hpp"
+#include "socks5.hpp"
 
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ip/v6_only.hpp>
+//#include <boost/asio/ip/v4_only.hpp>
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/strand.hpp>
@@ -105,37 +106,104 @@ int main(int argc, char *argv[]) {
             ctx.stop();
         });
         bccoro::spawn(bind_executor(ctx, [&ctx, port = *port](bccoro::yield_context yc) {
+
             boost::asio::ip::tcp::acceptor acceptor{ctx};
-            boost::asio::ip::tcp::endpoint ep{boost::asio::ip::tcp::v6(), port};
-            acceptor.open(ep.protocol());
-            acceptor.set_option(boost::asio::ip::v6_only{false});
-            acceptor.bind(ep);
-            acceptor.listen();
-            logger{} << "Listening on port " << port << "...";
+            boost::asio::ip::tcp::endpoint ep{boost::asio::ip::tcp::v4(), port};
+
+            //acceptor.open(ep.protocol());
+
+            boost::asio::ip::tcp::socket socket{make_strand(acceptor.get_executor())};
+            boost::system::error_code ec;
+
+            socket.async_connect(ep, yc[ec]);
+
             for (;;) {
-                boost::asio::ip::tcp::socket socket{make_strand(acceptor.get_executor())};
-                boost::system::error_code ec;
-                acceptor.async_accept(socket, yc[ec]);
+
+                //boost::asio::ip::tcp::socket socket{make_strand(acceptor.get_executor())};
+                //boost::system::error_code ec;
+
+                //socket.async_connect(ep, yc[ec]);
+
+                //acceptor.async_accept(socket, yc[ec]);
+
+                //stream.expires_after(timeout);
+
+
                 if (ec == boost::asio::error::operation_aborted)
                     return;
                 if (ec)
-                    logger{} << "Failed to accept connection: " << ec.message();
+                    logger{} << "Failed to connect: " << ec.message();
                 else
                     bccoro::spawn(bind_executor(socket.get_executor(),
                                                 [stream = boost::beast::tcp_stream{std::move(socket)}]
                                                         (bccoro::yield_context yc) mutable {
+
                                                     constexpr static std::chrono::seconds timeout{20};
                                                     constexpr static std::size_t limit = 1024;
                                                     boost::system::error_code ec;
-                                                    std::string in_buf, out_buf;
-                                                    bigint a;
-                                                    auto read_buffered_number = [&](std::size_t n) {
+
+                                                    //std::string in_buf, out_buf;
+                                                    //bigint a;
+
+                                                    /*auto read_buffered_number = [&](std::size_t n) {
                                                         bigint x{in_buf.substr(0, n - 1)};
                                                         in_buf.erase(0, n);
                                                         return x;
-                                                    };
+                                                    };*/
+
                                                     for (;;) {
+
+                                                        boost::asio::io_context io_context;
+                                                        boost::asio::ip::tcp::resolver resolver(io_context);
+
+                                                        auto http_endpoint = *resolver.resolve(
+                                                                boost::asio::ip::tcp::v4(), "ya.ru", "https");
+
+                                                        socks5::request_first socks_request_first;
+
                                                         stream.expires_after(timeout);
+
+                                                        async_write(stream, socks_request_first.buffers(), yc[ec]);
+                                                        if (ec) {
+                                                            if (ec != boost::asio::error::operation_aborted)
+                                                                logger{} << "Failed to write first request: "
+                                                                         << ec.message();
+                                                            return;
+                                                        }
+
+                                                        stream.expires_after(timeout);
+                                                        socks5::reply_first socks_reply_first;
+                                                        stream.async_read_some(socks_reply_first.buffers(), yc[ec]);
+
+                                                        if (ec) {
+                                                            if (ec != boost::asio::error::operation_aborted)
+                                                                logger{} << "First reply error: " << ec.message();
+                                                            return;
+                                                        }
+
+                                                        stream.expires_after(timeout);
+                                                        socks5::request_second socks_request_second(
+                                                                socks5::request_second::connect, http_endpoint);
+
+                                                        async_write(stream, socks_request_second.buffers(), yc[ec]);
+                                                        if (ec) {
+                                                            if (ec != boost::asio::error::operation_aborted)
+                                                                logger{} << "Failed to write second request: "
+                                                                         << ec.message();
+                                                            return;
+                                                        }
+
+                                                        stream.expires_after(timeout);
+                                                        socks5::reply_second socks_reply_second;
+                                                        stream.async_read_some(socks_reply_second.buffers(), yc[ec]);
+
+                                                        if (ec) {
+                                                            if (ec != boost::asio::error::operation_aborted)
+                                                                logger{} << "Second reply error: " << ec.message();
+                                                            return;
+                                                        }
+
+                                                        /*
                                                         std::size_t n = async_read_until(
                                                                 stream,
                                                                 boost::asio::dynamic_string_buffer(in_buf, limit),
@@ -173,6 +241,7 @@ int main(int argc, char *argv[]) {
                                                                     << boost::current_exception_diagnostic_information();
                                                             return;
                                                         }
+
                                                         stream.expires_after(timeout);
                                                         async_write(stream, boost::asio::buffer(out_buf), yc[ec]);
                                                         if (ec) {
@@ -180,6 +249,7 @@ int main(int argc, char *argv[]) {
                                                                 logger{} << "Failed to write result: " << ec.message();
                                                             return;
                                                         }
+                                                        */
                                                     }
                                                 }));
             }
