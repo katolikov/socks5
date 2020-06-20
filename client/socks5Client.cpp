@@ -4,7 +4,6 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
-//#include <boost/asio/ip/v4_only.hpp>
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/strand.hpp>
@@ -110,36 +109,27 @@ int main(int argc, char *argv[]) {
         bccoro::spawn(bind_executor(ctx, [&ctx, port = *port](bccoro::yield_context yc) {
 
             boost::asio::ip::tcp::endpoint ep{boost::asio::ip::tcp::v4(), port};
-
             constexpr static std::chrono::seconds timeout{20};
-
-            boost::asio::io_context io_context;
-            boost::asio::ip::tcp::resolver resolver(io_context);
-
+            boost::asio::ip::tcp::resolver resolver(ctx);
             auto http_endpoint = *resolver.resolve(
                     boost::asio::ip::tcp::v4(), "www.example.com", "http");
 
             for (;;) {
 
                 boost::system::error_code ec;
-                boost::system::error_code error_socket;
-
                 boost::beast::tcp_stream socket{make_strand(ctx)};
+                socket.async_connect(ep, yc[ec]);
 
-                socket.async_connect(ep, yc[error_socket]);
-
-                if (error_socket == boost::asio::error::operation_aborted) {
+                if (ec == boost::asio::error::operation_aborted) {
                     return;
                 }
 
-                if (error_socket) {
-                    logger{} << "Failed to connect: " << error_socket.message();
+                if (ec) {
+                    logger{} << "Failed to connect: " << ec.message();
                 }
 
                 socks5::request_first socks_request_first;
-
                 socket.expires_after(timeout);
-
                 socket.async_write_some(socks_request_first.buffers(), yc[ec]);
 
                 if (ec) {
@@ -148,53 +138,50 @@ int main(int argc, char *argv[]) {
                 }
 
                 socket.expires_after(timeout);
-                    socks5::reply_first socks_reply_first;
-                    socket.async_read_some(socks_reply_first.buffers(), yc[ec]);
+                socks5::reply_first socks_reply_first;
+                socket.async_read_some(socks_reply_first.buffers(), yc[ec]);
 
-                    if (ec) {
-                        logger{} << "First reply error: " << ec.message();
-                    }
-
-                socket.expires_after(timeout);
-                    socks5::request_second socks_request_second(
-                            socks5::request_second::connect, http_endpoint);
-
-                    socket.async_write_some(socks_request_second.buffers(), yc[ec]);
-                    if (ec) {
-                        logger{} << "Failed to write second request: "
-                                     << ec.message();
-                    }
+                if (ec) {
+                    logger{} << "First reply error: " << ec.message();
+                }
 
                 socket.expires_after(timeout);
-                    socks5::reply_second socks_reply_second;
-                    socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
+                socks5::request_second socks_request_second(
+                        socks5::request_second::connect, http_endpoint);
+                socket.async_write_some(socks_request_second.buffers(), yc[ec]);
 
-                    if (ec) {
-                        logger{} << "Second reply error: " << ec.message();
-                    }
+                if (ec) {
+                    logger{} << "Failed to write second request: "
+                             << ec.message();
+                }
 
-                    std::string request =
-                            "GET / HTTP/1.0\r\n"
-                            "Host: www.example.com\r\n"
-                            "Accept: */*\r\n"
-                            "Connection: close\r\n\r\n";
+                socket.expires_after(timeout);
+                socks5::reply_second socks_reply_second;
+                socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
 
-                    // Send the HTTP request.
+                if (ec) {
+                    logger{} << "Second reply error: " << ec.message();
+                }
+
+                std::string request =
+                        "GET / HTTP/1.0\r\n"
+                        "Host: www.example.com\r\n"
+                        "Accept: */*\r\n"
+                        "Connection: close\r\n\r\n";
+
+                // Send the HTTP request.
                 socket.expires_after(timeout);
                 socket.async_write_some(boost::asio::buffer(request), yc[ec]);
 
-                    // Read until EOF, writing data to output as we go.
-                    std::array<char, 512> response{};
-                    boost::system::error_code error;
-
-                    while (std::size_t s = socket.async_read_some(
-                            boost::asio::buffer(response), yc[ec]))
-                        std::cout.write(response.data(), s);
-
-                    if (ec) {
-                        logger{} << "Close Error: " << ec.message();
-                    }
-
+                // Read until EOF, writing data to output as we go.
+                std::array<char, 512> response{};
+                boost::system::error_code error;
+                while (std::size_t s = socket.async_read_some(
+                        boost::asio::buffer(response), yc[ec]))
+                    std::cout.write(response.data(), s);
+                if (ec) {
+                    logger{} << "Close Error: " << ec.message();
+                }
             }
 
         }));
