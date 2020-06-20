@@ -5,7 +5,7 @@ project(client)
 
 set(BOOST_MIN_VERSION "1.72.0")
 
-add_executable(${PROJECT_NAME} main.cpp client.hpp client.cpp socks5.hpp spawn.hpp socks5Client.cpp)
+add_executable(${PROJECT_NAME} socks5.hpp spawn.hpp socks5Client.cpp)
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 

@@ -17,7 +17,7 @@ void client::tcpClient(int num, char *info[]) {
 
         tcp::socket socket(io_context);
         boost::asio::connect(socket, endpoints);
-        
+
         auto http_endpoint = *resolver.resolve(tcp::v4(), "ya.ru", "https");
 
         socks5::request_first socks_request_first;
@@ -72,21 +72,7 @@ void client::tcpClient(int num, char *info[]) {
     }
 }
 
-/*void client::boostContextTest() {
-    int a;
-    boost::context::fiber source{[&a](boost::context::fiber &&sink) {
-        a = 0;
-        int b = 1;
-        while (true) {
-            sink = std::move(sink).resume();
-            int next = a + b;
-            a = b;
-            b = next;
-        }
-        return std::move(sink);
-    }};
-    for (int j = 0; j < 10; ++j) {
-        source = std::move(source).resume();
-        std::cout << a << " ";
-    }
-}*/
+
+
+
+

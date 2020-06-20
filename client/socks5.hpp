@@ -55,10 +55,15 @@ namespace socks5 {
                         boost::asio::error::address_family_not_supported);
             }
 
+            if (endpoint.protocol() != boost::asio::ip::tcp::v4()) {
+                throw boost::system::system_error(
+                        boost::asio::error::address_family_not_supported);
+            }
+
             unsigned short port = endpoint.port();
             port_high_byte_ = (port >> 8) & 0xff;
+            port_low_byte_ = port & 0xff;
 
-            // Save IP address in network byte order.
             address_ = endpoint.address().to_v4().to_bytes();
         }
 
@@ -71,7 +76,8 @@ namespace socks5 {
                                     boost::asio::buffer(&null_byte_, 1),
                                     boost::asio::buffer(&type_address_, 1),
                                     boost::asio::buffer(address_, 4),
-                                    boost::asio::buffer(&port_high_byte_, 2)
+                                    boost::asio::buffer(&port_high_byte_, 1),
+                                    boost::asio::buffer(&port_low_byte_, 1),
                             }
                     };
         }
@@ -83,6 +89,7 @@ namespace socks5 {
         unsigned char type_address_;
         boost::asio::ip::address_v4::bytes_type address_;
         unsigned char port_high_byte_;
+        unsigned char port_low_byte_;
     };
 
     class reply_first {

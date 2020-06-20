@@ -109,88 +109,79 @@ int main(int argc, char *argv[]) {
 
         bccoro::spawn(bind_executor(ctx, [&ctx, port = *port](bccoro::yield_context yc) {
 
-            boost::asio::ip::tcp::acceptor acceptor{ctx};
             boost::asio::ip::tcp::endpoint ep{boost::asio::ip::tcp::v4(), port};
 
-            //acceptor.open(ep.protocol());
-            boost::asio::ip::tcp::socket socket{make_strand(acceptor.get_executor())};
-            boost::system::error_code ec;
-            boost::system::error_code error_socket;
-            socket.async_connect(ep, yc[error_socket]);
+            constexpr static std::chrono::seconds timeout{20};
 
-            if (error_socket == boost::asio::error::operation_aborted) {
-                return;
-            }
-            if (error_socket) {
-                logger{} << "Failed to connect: " << error_socket.message();
-            } else {
+            boost::asio::io_context io_context;
+            boost::asio::ip::tcp::resolver resolver(io_context);
 
-                constexpr static std::chrono::seconds timeout{20};
+            auto http_endpoint = *resolver.resolve(
+                    boost::asio::ip::tcp::v4(), "www.example.com", "http");
 
-                boost::asio::io_context io_context;
-                boost::asio::ip::tcp::resolver resolver(io_context);
+            for (;;) {
 
-                auto http_endpoint = *resolver.resolve(
-                        boost::asio::ip::tcp::v4(), "government.ru", "http");
+                boost::system::error_code ec;
+                boost::system::error_code error_socket;
 
-                for (;;) {
+                boost::beast::tcp_stream socket{make_strand(ctx)};
 
-                    socket.async_connect(ep, yc[error_socket]);
+                socket.async_connect(ep, yc[error_socket]);
 
-                    socks5::request_first socks_request_first;
+                if (error_socket == boost::asio::error::operation_aborted) {
+                    return;
+                }
 
-                    //socket.expires_after(timeout);
+                if (error_socket) {
+                    logger{} << "Failed to connect: " << error_socket.message();
+                }
 
-                    socket.async_write_some(socks_request_first.buffers(), yc[ec]);
+                socks5::request_first socks_request_first;
 
-                    if (ec) {
-                        if (ec != boost::asio::error::operation_aborted)
-                            logger{} << "Failed to write first request: "
-                                     << ec.message();
-                        return;
-                    }
+                socket.expires_after(timeout);
 
-                    //stream.expires_after(timeout);
+                socket.async_write_some(socks_request_first.buffers(), yc[ec]);
+
+                if (ec) {
+                    logger{} << "Failed to write first request: "
+                             << ec.message();
+                }
+
+                socket.expires_after(timeout);
                     socks5::reply_first socks_reply_first;
                     socket.async_read_some(socks_reply_first.buffers(), yc[ec]);
 
                     if (ec) {
-                        if (ec != boost::asio::error::operation_aborted)
-                            logger{} << "First reply error: " << ec.message();
-                        return;
+                        logger{} << "First reply error: " << ec.message();
                     }
 
-                    //stream.expires_after(timeout);
+                socket.expires_after(timeout);
                     socks5::request_second socks_request_second(
                             socks5::request_second::connect, http_endpoint);
 
                     socket.async_write_some(socks_request_second.buffers(), yc[ec]);
                     if (ec) {
-                        if (ec != boost::asio::error::operation_aborted)
-                            logger{} << "Failed to write second request: "
+                        logger{} << "Failed to write second request: "
                                      << ec.message();
-                        return;
                     }
 
-                    //stream.expires_after(timeout);
+                socket.expires_after(timeout);
                     socks5::reply_second socks_reply_second;
                     socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
 
                     if (ec) {
-                        if (ec != boost::asio::error::operation_aborted)
-                            logger{} << "Second reply error: " << ec.message();
-                        return;
+                        logger{} << "Second reply error: " << ec.message();
                     }
 
                     std::string request =
                             "GET / HTTP/1.0\r\n"
-                            "Host: www.government.ru\r\n"
+                            "Host: www.example.com\r\n"
                             "Accept: */*\r\n"
                             "Connection: close\r\n\r\n";
 
                     // Send the HTTP request.
-                    //stream.expires_after(timeout);
-                    socket.async_write_some(boost::asio::buffer(request), yc[ec]);
+                socket.expires_after(timeout);
+                socket.async_write_some(boost::asio::buffer(request), yc[ec]);
 
                     // Read until EOF, writing data to output as we go.
                     std::array<char, 512> response{};
@@ -201,30 +192,9 @@ int main(int argc, char *argv[]) {
                         std::cout.write(response.data(), s);
 
                     if (ec) {
-                        if (ec != boost::asio::error::operation_aborted)
-                            logger{} << "Close Error: " << ec.message();
-                        return;
+                        logger{} << "Close Error: " << ec.message();
                     }
 
-                    //socket.async_connect(ep, yc[ec]);
-
-                    /*bccoro::spawn(bind_executor(socket.get_executor(),
-                                                     [stream = boost::beast::tcp_stream {std::move(socket)}]
-                                                             (bccoro::yield_context yc) mutable {
-
-                                                         boost::system::error_code ec;
-
-                                                         boost::asio::io_context io_context;
-                                                         boost::asio::ip::tcp::resolver resolver(io_context);
-
-                                                         auto http_endpoint = *resolver.resolve(
-                                                                 boost::asio::ip::tcp::v4(), "government.ru", "http");
-
-                                                         for (;;) {
-
-                                                         }
-                                                     }));*/
-                }
             }
 
         }));
