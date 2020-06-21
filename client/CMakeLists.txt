@@ -13,4 +13,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF)
 
 find_package(Boost 1.72.0 REQUIRED COMPONENTS context chrono system thread)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE Boost::context Boost::chrono Boost::system Boost::thread)
+find_package(PkgConfig)
+
+pkg_check_modules(uv REQUIRED IMPORTED_TARGET libuvw-shared)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE Boost::context Boost::chrono Boost::system Boost::thread PkgConfig::uv)
