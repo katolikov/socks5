@@ -4,11 +4,8 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/read_until.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/strand.hpp>
-#include <boost/asio/streambuf.hpp>
-#include <boost/asio/write.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
@@ -17,7 +14,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
-#include <memory>
+#include <string>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -94,15 +91,25 @@ int main(int argc, char *argv[]) {
 
     try {
         if (argc < 2)
-            throw std::runtime_error(format("Usage: ", argv[0], " <listen-port>"));
+            logger{} << format("Usage: ", argv[0], " <listen-port>");
         auto port = from_chars<std::uint16_t>(argv[1]);
         if (!port || !*port)
-            throw std::runtime_error("Port must be in [1;65535]");
+            logger{} << "Port must be in [1;65535]";
         auto num = from_chars<int>(argv[2]);
         if (!num)
-            throw std::runtime_error("Number of client must be large then 0");
+            logger{} << "Number of client must be large then 0";
+        auto num_thread = from_chars<std::size_t>(argv[3]);
+        if (!num_thread)
+            logger{} << "Number of thread must be large then 0";
+        auto mode = from_chars<int>(argv[4]);
+        if (mode > 1 || mode < 0)
+            logger{} << "Mode must be in [0;1]\n"
+                        "0 : small size request\n"
+                        "1 : large size request\n";
+
         boost::asio::io_context ctx;
         boost::asio::signal_set stop_signals{ctx, SIGINT, SIGTERM};
+
         stop_signals.async_wait([&](boost::system::error_code ec, int /*signal*/) {
             if (ec)
                 return;
@@ -110,18 +117,29 @@ int main(int argc, char *argv[]) {
             ctx.stop();
         });
 
+        int count_request = 0;
+        int count_reply = 0;
+
+        std::string request;
+
+        if (!mode)
+            request = "*";
+        else
+            request.resize(1048576, '*');
+
+        boost::asio::ip::tcp::resolver resolver(ctx);
+
+        auto http_endpoint = *resolver.resolve(
+                boost::asio::ip::tcp::v4(), "www.example.com", "http");
+
         for (auto i = 0; i < num; ++i) {
 
             boost::asio::ip::tcp::socket socket_new{make_strand(ctx)};
 
-            boost::asio::ip::tcp::resolver resolver(ctx);
-
-            auto http_endpoint = *resolver.resolve(
-                    boost::asio::ip::tcp::v4(), "www.example.com", "http");
-
             bccoro::spawn(bind_executor(ctx,
                                         [socket = boost::beast::tcp_stream{
-                                                std::move(socket_new)}, http_endpoint, port = *port]
+                                                std::move(socket_new)},
+                                                http_endpoint, port = *port, request, count_request, count_reply]
                                                 (bccoro::yield_context yc) mutable {
 
                                             boost::asio::ip::tcp::endpoint ep{boost::asio::ip::tcp::v4(), port};
@@ -138,6 +156,7 @@ int main(int argc, char *argv[]) {
 
                                                 if (ec) {
                                                     logger{} << "Failed to connect: " << ec.message();
+                                                    return;
                                                 }
 
                                                 socks5::client::request_first socks_request_first;
@@ -147,7 +166,8 @@ int main(int argc, char *argv[]) {
                                                 if (ec) {
                                                     logger{} << "Failed to write first request: "
                                                              << ec.message();
-                                                }
+                                                } else
+                                                    count_request++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::reply_first socks_reply_first;
@@ -155,7 +175,8 @@ int main(int argc, char *argv[]) {
 
                                                 if (ec) {
                                                     logger{} << "First reply error: " << ec.message();
-                                                }
+                                                } else
+                                                    count_reply++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::request_second socks_request_second(
@@ -165,39 +186,60 @@ int main(int argc, char *argv[]) {
                                                 if (ec) {
                                                     logger{} << "Failed to write second request: "
                                                              << ec.message();
-                                                }
+                                                } else
+                                                    count_request++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::reply_second socks_reply_second;
                                                 socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
+                                                count_reply++;
 
                                                 if (ec) {
                                                     logger{} << "Second reply error: " << ec.message();
-                                                }
+                                                } else
+                                                    count_reply++;
 
-                                                std::string request =
-                                                        "GET / HTTP/1.0\r\n"
-                                                        "Host: www.example.com\r\n"
-                                                        "Accept: */*\r\n"
-                                                        "Connection: close\r\n\r\n";
+                                                //std::string request_new =
+                                                //       "GET / HTTP/1.0\r\n"
+                                                //       "Host: www.example.com\r\n"
+                                                //       "Accept: */*\r\n"
+                                                //       "Connection: close\r\n\r\n";
 
                                                 // Send the HTTP request.
                                                 socket.expires_after(timeout);
                                                 socket.async_write_some(boost::asio::buffer(request), yc[ec]);
 
+                                                if (ec) {
+                                                    logger{} << "Write close request error: " << ec.message();
+                                                } else
+                                                    count_request++;
+
                                                 // Read until EOF, writing data to output as we go.
-                                                std::array<char, 512> response{};
-                                                while (std::size_t s = socket.async_read_some(
+                                                std::array<char, 1048576> response{};
+
+                                                /*while (std::size_t s = socket.async_read_some(
                                                         boost::asio::buffer(response), yc[ec]))
                                                     std::cout.write(response.data(), s);
+                                                */
+                                                socket.expires_after(timeout);
+                                                socket.async_read_some(boost::asio::buffer(response), yc[ec]);
+
                                                 if (ec) {
-                                                    logger{} << "Close Error: " << ec.message();
-                                                }
+                                                    logger{} << "Read close reply error: " << ec.message();
+                                                } else
+                                                    count_reply++;
+
+                                                //socket.expires_after(std::chrono::milliseconds(1));
                                             }
                                         }));
         }
+
         std::vector<std::thread> workers;
         std::size_t extra_workers = std::thread::hardware_concurrency() - 1;
+        if (num_thread > extra_workers) {
+            logger{} << "Count of choosen thread are not avalaible now.\n"
+                     << extra_workers << " - thread avalaible.\n";
+        }
         workers.reserve(extra_workers);
         auto ase = at_scope_exit([&]() noexcept {
             for (auto &t:workers)
