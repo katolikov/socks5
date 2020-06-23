@@ -7,9 +7,11 @@
 #include <iostream>
 #include <map>
 #include "session.hpp"
+#include "msg.h"
 
 typedef std::map<uv_stream_t*, Session> session_map_t;
 typedef std::map<uv_stream_t*, Session> socket_map_t;
+typedef std::map<uv_timer_t*, uv_stream_t*> timer_map_t;
 
 class Server{
 
@@ -29,6 +31,10 @@ public:
 
     void on_new_connection(uv_stream_t *server, int status);
 
+    void on_client_timeout(uv_timer_t* handle);
+
+    void remove_client(uv_stream_t* client);
+
     static bool s5_parse_auth(std::string msg);
 
     bool s5_parse_req(std::string msg);
@@ -47,6 +53,11 @@ public:
 
     void write_after_auth(const std::string& message_second, uv_stream_t *client);
 
+    msg_buffer* get_read_buffer()
+    {
+        return &read_buffer;
+    }
+
     static void alloc_client_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
 
     static void alloc_server_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
@@ -55,11 +66,11 @@ public:
 
 private:
 
-    std::string auth_answer =
+    char auth_answer[2] =
 		{ 0x05, 0x00 };
 
-    std::string after_auth_answer =
-		{ 0x05, 0x00, 0x00, 0x01, 0x00,
+    char after_auth_answer[11] =
+		   { 0x05, 0x00, 0x00, 0x01, 0x00,
           	0x00, 0x00, 0x00, 0x00, 0x00,
           	0x00 };
 
@@ -79,7 +90,15 @@ private:
 
     uv_connect_t m_server_req;
 
+    uv_loop_t *loop;
+
     uv_write_t m_write_req;
+
+    msg_buffer msg_queue;
+
+    msg_buffer read_buffer;
+
+    timer_map_t active_timers;
 
     Session sock_session;
     Session new_session;

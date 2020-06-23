@@ -13,9 +13,28 @@
 class Session
 {
 public:
-    Session()= default;
+    Session();
     ~Session()= default;
+
+    void Activate()
+    {
+        active = true;
+    }
+
+    void Deactivate()
+    {
+        active = false;
+    }
+
+    bool IsActive() const
+    {
+        return active;
+    }
+
+    bool active;
+
     std::shared_ptr<uv_tcp_t> connection;
+    std::shared_ptr<uv_timer_t> activity_timer;
 };
 
 #endif //SOCKS5_LIBUV_SESSION_HPP
