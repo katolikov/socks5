@@ -9,7 +9,8 @@
 #include "session.hpp"
 
 typedef std::map<uv_stream_t*, Session> session_map_t;
-typedef std::map<uv_stream_t*, Session> socket_map_t;
+typedef std::map<uv_stream_t*, Session> socket_map_t_server;
+typedef std::map<uv_stream_t*, uv_stream_t*> socket_map_t_client;
 
 class Server{
 
@@ -19,7 +20,7 @@ public:
 
     ~Server();
 
-    void proxy_start();
+    void proxy_start(uv_stream_t *client);
 
     static Server* get_instance();
 
@@ -55,11 +56,11 @@ public:
 
 private:
 
-    std::string auth_answer =
-		{ 0x05, 0x00 };
+    char auth_answer[2] =
+		      { 0x05, 0x00 };
 
-    std::string after_auth_answer =
-		{ 0x05, 0x00, 0x00, 0x01, 0x00,
+    char after_auth_answer[11] =
+		      { 0x05, 0x00, 0x00, 0x01, 0x00,
           	0x00, 0x00, 0x00, 0x00, 0x00,
           	0x00 };
 
@@ -73,10 +74,6 @@ private:
 
     uv_tcp_t m_server;
 
-    uv_tcp_t* server_get;
-
-    uv_stream_t* client_req;
-
     uv_connect_t m_server_req;
 
     uv_write_t m_write_req;
@@ -85,7 +82,9 @@ private:
     Session new_session;
 
     session_map_t open_sessions;
-    socket_map_t open_socket;
+
+    socket_map_t_server open_socket;
+    socket_map_t_client client_socket;
 
     struct sockaddr_in m_addr;
     struct sockaddr_in req_addr;

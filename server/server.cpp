@@ -1,35 +1,42 @@
 #include "server.hpp"
-Server::Server():
-
-    server_get( new uv_tcp_t ),
-    client_req( new uv_stream_t )
-{}
+Server::Server(){}
 
 Server::~Server(){
 
     std::cout << "\033[1;5;31mProxy terminated\033[0m\n";
     uv_loop_close(uv_default_loop());
-    delete client_req;
-    delete server_get;
 }
 
 Server* Server::get_instance(){
-	
+
     static Server server;
     return &server;
 }
 
 bool Server::init(const std::string& in_person_addr, int in_port) {
 
-    uv_tcp_init(uv_default_loop(), &m_server);
+    error = uv_tcp_init(uv_default_loop(), &m_server);
 
-    uv_ip4_addr((char *) in_person_addr.c_str(), in_port, &m_addr);
+    if(error != 0){
+        std::cout << "\033[1;5;31m" << "Init error: " << uv_strerror(error) << "\033[m\n";
+    }
 
-    uv_tcp_bind(&m_server, reinterpret_cast<const struct sockaddr *> (&m_addr), 0);
+    error = uv_ip4_addr((char *) in_person_addr.c_str(), in_port, &m_addr);
+
+    if(error != 0){
+        std::cout << "\033[1;5;31m" << "uv_ip4_addr error: " << uv_strerror(error) << "\033[m\n";
+    }
+
+    error = uv_tcp_bind(&m_server, reinterpret_cast<const struct sockaddr *> (&m_addr), 0);
+
+    if(error != 0){
+        std::cout << "\033[1;5;31m" << "Bind error: " << uv_strerror(error) << "\033[m\n";
+    }
 
     error = uv_listen(reinterpret_cast<uv_stream_t *> (&m_server), 0, [](uv_stream_t *server, int status) {
         Server::get_instance()->on_new_connection(server, status);
     });
+
     if (error == 0) {
         std::cout << "\033[1;5;33m[INFO]\033[0m Proxy start: " << (char *) in_person_addr.c_str() << ":" << in_port
                   << '\n';
@@ -57,7 +64,6 @@ void Server::alloc_client_buffer(uv_handle_t *handle, size_t suggested_size, uv_
 }
 
 void Server::alloc_server_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-
     buf->base = new char[suggested_size];
     buf->len = suggested_size;
 }
@@ -66,17 +72,19 @@ void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *bu
 
     auto connection_pos = open_sessions.find(client);
     Session get_client = connection_pos->second;
+    Session get_server = open_socket.begin()->second;
 
     if (connection_pos != open_sessions.end()) {
         if (len < 0) {
             std::cout << "\033[1;5;31m" << uv_err_name(len) << ": Read client error\n\033[0m";
             uv_close(reinterpret_cast<uv_handle_t *> (get_client.connection.get()), nullptr);
-            delete[] buf->base;
         } else if (len > 0) {
             std::cout << "\033[1;5;34mProxy working client\n\033[0m";
 
             uv_buf_t buf_server = uv_buf_init(buf->base, len);
-            error = uv_write(&m_server_wreq, reinterpret_cast<uv_stream_t *>(server_get), &buf_server, 1, nullptr);
+            error = uv_write(&m_server_wreq,
+                reinterpret_cast<uv_stream_t *>(get_server.connection.get()),
+                &buf_server, 1, nullptr);
 
             if (error == 0) {
                 std::cout << "\033[1;5;34mWrite to server succeed!\n\033[0m";
@@ -98,17 +106,17 @@ void Server::on_server_read(uv_stream_t *server, ssize_t len, const uv_buf_t *bu
             if (len == UV_EOF) {
                 std::cout << "\033[1;5;31m" << "Client error: " << uv_err_name(len) << "\033[0m\n";
                 uv_close(reinterpret_cast<uv_handle_t *>(get_server.connection.get()), nullptr);
-                delete[] buf->base;
             } else {
                 std::cout << "\033[1;5;31m" << uv_err_name(len) << ": Read server error\n\033[0m";
                 uv_close(reinterpret_cast<uv_handle_t *>(get_server.connection.get()), nullptr);
-                delete[] buf->base;
             }
         } else if (len > 0) {
             std::cout << "\033[1;5;34mProxy working server\n\033[0m";
 
             uv_buf_t buf_server = uv_buf_init(buf->base, len);
-            error = uv_write(&m_client_wreq, client_req, &buf_server, 1, nullptr);
+            error = uv_write(&m_client_wreq,
+                  client_socket.begin()->second,
+                  &buf_server, 1, nullptr);
 
             if (error == 0) {
                 std::cout << "\033[1;5;34mWrite to client succeed!\n\033[0m";
@@ -128,17 +136,15 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
 
     std::cout << "\n\033[1;7;34mPROXY.\n\033[7;0m";
 
-    auto connection_pos = open_socket.find(reinterpret_cast<uv_stream_t *>(req->handle));
+    auto connection_pos = open_socket.find(
+                    reinterpret_cast<uv_stream_t*>(req->handle));
 
-    Session get;
-
-    get = connection_pos->second;
-
-    server_get = get.connection.get();
+    Session get = connection_pos->second;
 
     if (connection_pos != open_socket.end()) {
 
-        error = uv_read_start(client_req, [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
+        error = uv_read_start(client_socket.begin()->second,
+                              [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
                                   Server::get_instance()->alloc_client_buffer(stream, size, buf);
                               },
                               [](uv_stream_t *client, ssize_t len, const uv_buf_t *buf) {
@@ -151,7 +157,7 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
             std::cout << "\033[1;5;31mRead to client error: " << uv_strerror(error) << "\033[0m\n";
         }
 
-        error = uv_read_start(reinterpret_cast<uv_stream_t*>(req->handle), [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
+        error = uv_read_start(reinterpret_cast<uv_stream_t*>(get.connection.get()), [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
                                   Server::get_instance()->alloc_server_buffer(stream, size, buf);
                               },
                               [](uv_stream_t *server, ssize_t len, const uv_buf_t *buf) {
@@ -166,13 +172,14 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
     }
 }
 
-void Server::proxy_start() {
+void Server::proxy_start(uv_stream_t *client) {
 
     sock_session.connection = std::make_shared<uv_tcp_t>();
 
     uv_tcp_init(uv_default_loop(), sock_session.connection.get());
 
     uv_ip4_addr((char *) ip_req.c_str(), port, &req_addr);
+
     error = uv_tcp_connect(&m_server_req, sock_session.connection.get(), reinterpret_cast<const struct sockaddr *> (&req_addr),
                            [](uv_connect_t *req, int status) {
                                Server::get_instance()->on_server_conn(req, status);
@@ -181,7 +188,10 @@ void Server::proxy_start() {
     if (error == 0) {
         std::cout << "\033[1;5;34mConnecting to: " << ip_req << ':' << port << "\033[0m\n";
         auto *key = reinterpret_cast<uv_stream_t*> (sock_session.connection.get());
+
         open_socket.insert({key, sock_session});
+        client_socket.insert({{key, client}});
+
     } else {
         std::cout << "\033[1;5;31mConnecting to ip error: " << uv_strerror(error) << "\033[0m\n";
         uv_close(reinterpret_cast<uv_handle_t*> (sock_session.connection.get()), nullptr);
@@ -221,17 +231,20 @@ bool Server::s5_parse_req(std::string msg){
     if((msg[0]== 0x05) && (msg[1]== 0x01) && (msg[3] == 0x01)){
 
     	Server::transform_ip_port(msg);
-    	sleep(1);
     	std::cout << "\033[1;5;34mIP: " << ip_req << "\033[0m\n";
     	std::cout << "\033[1;5;34mPORT: " << port << "\033[0m\n";
     	return true;
     } else{
-	after_auth_answer[1] = 0x07;
-	return false;
+      	after_auth_answer[1] = 0x07;
+      	return false;
     }
 }
 
 void Server::write_after_auth(const std::string& message_second, uv_stream_t *client) {
+
+    Session get_client;
+    auto connection_pos = open_sessions.find(client);
+    get_client = connection_pos->second;
 
     int len = static_cast<int> (message_second.length());
 
@@ -245,12 +258,12 @@ void Server::write_after_auth(const std::string& message_second, uv_stream_t *cl
     int buf_count = 1;
 
     if (after_auth_answer[1] == 0x00) {
-        client_req = client;
-        Server::proxy_start();
+        Server::proxy_start(reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
         ip_req.clear();
     }
 
-    error = uv_write(&m_write_req, client, &buf, buf_count, nullptr);
+    error = uv_write(&m_write_req, reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
+                      &buf, buf_count, nullptr);
 
     if (error == 0) {
         std::cout << "\033[1;5;34mSend to client succeed!\033[0m\n";
@@ -260,6 +273,10 @@ void Server::write_after_auth(const std::string& message_second, uv_stream_t *cl
 }
 
 void Server::write(const std::string& message_one, uv_stream_t *client) {
+
+    Session get_client;
+    auto connection_pos = open_sessions.find(client);
+    get_client = connection_pos ->second;
 
     int len = static_cast<int> (message_one.length());
 
@@ -272,7 +289,8 @@ void Server::write(const std::string& message_one, uv_stream_t *client) {
 
     int buf_count = 1;
 
-    error = uv_write(&m_write_req, client, &buf, buf_count, nullptr);
+    error = uv_write(&m_write_req, reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
+                  &buf, buf_count, nullptr);
 
     if (error == 0) {
         std::cout << "\033[1;5;34mSend to client succeed!\n\033[0m";
@@ -280,12 +298,13 @@ void Server::write(const std::string& message_one, uv_stream_t *client) {
         std::cout << "\033[1;5;31mSend to client error: " << uv_strerror(error) << "\033[0m\n";
     }
 
-    error = uv_read_start(client, [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
+    error = uv_read_start(reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
+                          [](uv_handle_t *stream, size_t size, uv_buf_t *buf) {
                               Server::get_instance()->alloc_server(stream, size, buf);
                           },
                           [](uv_stream_t *stream, ssize_t i, const uv_buf_t *buf) {
                               if (i < 0)
-                                  std::cout << "\033[1;5;31m" << uv_err_name(i) << ": Read server error\n\033[0m";
+                                std::cout << "\033[1;5;31m" << uv_err_name(i) << ": Read server error\n\033[0m";
                               Server::get_instance()->second_msg_recv(stream, i, buf);
                           });
 
@@ -301,12 +320,14 @@ void Server::second_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf
     Session get_client;
     auto connection_pos = open_sessions.find(client);
     get_client = connection_pos ->second;
+
     if (connection_pos != open_sessions.end()) {
         if (i == UV_EOF) {
             std::cout << "\033[1;5;31mClient Disconnected\n\033[0m";
-            delete[] buf->base;
+
         } else if (i > 0) {
-            uv_read_stop(client);
+
+            uv_read_stop(reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
 
             std::string str(buf->base, i);
 
@@ -314,12 +335,12 @@ void Server::second_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf
 
                 after_auth_answer[1] = 0x00;
                 Server::write_after_auth(after_auth_answer, reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
-                delete[] buf->base;
+
             } else {
                 std::cout << "\033[1;5;31mUnknown message\n\033[0m";
                 after_auth_answer[1] = 0x08;
                 Server::write_after_auth(after_auth_answer, reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
-                delete[] buf->base;
+
             }
         }
     }
@@ -330,13 +351,14 @@ void Server::on_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
     Session get_client;
     auto connection_pos = open_sessions.find(client);
     get_client = connection_pos ->second;
+
     if (connection_pos != open_sessions.end()) {
         if (i == UV_EOF) {
             std::cout << "\033[1;5;31mClient Disconnected\n\033[0m";
-            delete[] buf->base;
+
         } else if (i > 0) {
 
-            uv_read_stop(client);
+            uv_read_stop(reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
 
             std::string str(buf->base, i);
 
@@ -345,7 +367,7 @@ void Server::on_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
                 Server::write(auth_answer, reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
             } else {
                 std::cout << "\033[1;5;31mUnknown protocol\n\033[0m";
-                delete[] buf->base;
+
             }
         }
     }
@@ -379,4 +401,3 @@ void Server::on_new_connection(uv_stream_t *server, int status) {
         uv_close(reinterpret_cast<uv_handle_t *>(new_session.connection.get()), nullptr);
     }
 }
-
