@@ -69,14 +69,9 @@ private:
     int error;
     int port;
 
-    uv_write_t m_server_wreq;
-    uv_write_t m_client_wreq;
-
     uv_tcp_t m_server;
 
     uv_connect_t m_server_req;
-
-    uv_write_t m_write_req;
 
     Session sock_session;
     Session new_session;
