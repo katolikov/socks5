@@ -13,6 +13,6 @@ int main(int argc, char* argv[]) {
     if(server->init(argv[1], atoi(argv[2]))){
         std::cout << "Proxy init\n";
     }
-    
+
     return 0;
 }
