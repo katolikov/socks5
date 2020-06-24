@@ -9,9 +9,10 @@ int main(int argc, char* argv[]) {
     }
 
     Server *server = Server::get_instance();
-    if(server->init("127.0.0.1", atoi(argv[2]))){
+
+    if(server->init(argv[1], atoi(argv[2]))){
         std::cout << "Proxy init\n";
     }
-
+    
     return 0;
 }

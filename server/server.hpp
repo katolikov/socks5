@@ -10,8 +10,14 @@
 #include "msg.h"
 
 typedef std::map<uv_stream_t*, Session> session_map_t;
+<<<<<<< HEAD
+typedef std::map<uv_stream_t*, Session> socket_map_t_server;
+typedef std::map<uv_stream_t*, uv_stream_t*> socket_map_t_client;
+typedef std::map<uv_stream_t*, Session> socket_map_t_client_server;
+=======
 typedef std::map<uv_stream_t*, Session> socket_map_t;
 typedef std::map<uv_timer_t*, uv_stream_t*> timer_map_t;
+>>>>>>> e13768284044cf531bcd4c1a4ef86b9898ccd04d
 
 class Server{
 
@@ -79,6 +85,11 @@ private:
     int error;
     int port;
 
+<<<<<<< HEAD
+    std::unique_ptr<uv_tcp_t> m_server;
+    std::unique_ptr<uv_loop_t> loop;
+    std::unique_ptr<uv_connect_t> m_server_req;
+=======
     uv_write_t m_server_wreq;
     uv_write_t m_client_wreq;
 
@@ -89,6 +100,7 @@ private:
     uv_stream_t* client_req;
 
     uv_connect_t m_server_req;
+>>>>>>> e13768284044cf531bcd4c1a4ef86b9898ccd04d
 
     uv_loop_t *loop;
 
@@ -103,8 +115,17 @@ private:
     Session sock_session;
     Session new_session;
 
+<<<<<<< HEAD
+    std::unique_ptr<uv_mutex_t> mutex;
+
+    session_map_t open_sessions;
+    socket_map_t_server open_socket;
+    socket_map_t_client client_socket;
+    socket_map_t_client_server server_socket;
+=======
     session_map_t open_sessions;
     socket_map_t open_socket;
+>>>>>>> e13768284044cf531bcd4c1a4ef86b9898ccd04d
 
     struct sockaddr_in m_addr;
     struct sockaddr_in req_addr;
