@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
                 boost::asio::ip::tcp::v4(), "www.example.com", "http");
 
         std::string ip = "127.0.0.1";
-        int port_ip = 8887;
+        int port_ip = 8888;
 
         for (auto i = 0; i < num; ++i) {
 
@@ -155,13 +155,9 @@ int main(int argc, char *argv[]) {
 
                                                 socket.async_connect(ep, yc[ec]);
 
-                                                if (ec == boost::asio::error::operation_aborted) {
-                                                    logger{} << "Operation aborted: " << ec.message();
-                                                    return;
-                                                }
-
                                                 if (ec) {
-                                                    logger{} << "Failed to connect: " << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted)
+                                                        logger{} << "Failed to connect: " << ec.message();
                                                     return;
                                                 }
                                                 socks5::client::request_first socks_request_first;
@@ -169,38 +165,44 @@ int main(int argc, char *argv[]) {
                                                 socket.async_write_some(socks_request_first.buffers(), yc[ec]);
 
                                                 if (ec) {
-                                                    logger{} << "Failed to write first request: "
-                                                             << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted)
+                                                        logger{} << "Failed to write first request: "
+                                                                 << ec.message();
                                                 } else
                                                     count_request++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::reply_first socks_reply_first;
-                                                socket.async_read_some(socks_reply_first.buffers(), yc[ec]);
+                                                auto n = socket.async_read_some(socks_reply_first.buffers(), yc[ec]);
 
                                                 if (ec) {
-                                                    logger{} << "First reply error: " << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted &&
+                                                        (ec != boost::asio::error::eof || n))
+                                                        logger{} << "First reply error: " << ec.message();
                                                 } else
                                                     count_reply++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::request_second socks_request_second(
-                                                        socks5::client::request_second::connect, http_endpoint);
+                                                        socks5::client::request_second::connect, way);
                                                 socket.async_write_some(socks_request_second.buffers(), yc[ec]);
 
                                                 if (ec) {
-                                                    logger{} << "Failed to write second request: "
-                                                             << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted)
+                                                        logger{} << "Failed to write second request: "
+                                                                 << ec.message();
                                                 } else
                                                     count_request++;
 
                                                 socket.expires_after(timeout);
                                                 socks5::client::reply_second socks_reply_second;
-                                                socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
+                                                n = socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
                                                 count_reply++;
 
                                                 if (ec) {
-                                                    logger{} << "Second reply error: " << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted &&
+                                                        (ec != boost::asio::error::eof || n))
+                                                        logger{} << "Second reply error: " << ec.message();
                                                 } else
                                                     count_reply++;
 
@@ -229,10 +231,12 @@ int main(int argc, char *argv[]) {
 
                                                 socket.expires_after(timeout);
 
-                                                socket.async_read_some(boost::asio::buffer(response), yc[ec]);
+                                                n = socket.async_read_some(boost::asio::buffer(response), yc[ec]);
 
                                                 if (ec) {
-                                                    logger{} << "Read close reply error: " << ec.message();
+                                                    if (ec != boost::asio::error::operation_aborted &&
+                                                        (ec != boost::asio::error::eof || n))
+                                                        logger{} << "Read close reply error: " << ec.message();
                                                 } else
                                                     count_reply++;
                                             }
