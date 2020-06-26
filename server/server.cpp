@@ -1,12 +1,11 @@
 #include "server.hpp"
 
 Server::Server():
-          mutex(new uv_mutex_t),
           loop(uv_default_loop()),
           m_server_req(new uv_connect_t),
           m_server(new uv_tcp_t)
 {
-  uv_mutex_init(mutex.get());
+  read_buffer.resize(MAX_BUFF_SIZE);
 }
 
 Server::~Server()
@@ -18,6 +17,11 @@ Server* Server::get_instance()
 {
     static Server server;
     return &server;
+}
+
+msg_buffer* Server::get_read_buffer()
+{
+    return &read_buffer;
 }
 
 bool Server::init(const std::string& in_person_addr, int in_port) {
@@ -57,46 +61,35 @@ bool Server::init(const std::string& in_person_addr, int in_port) {
     }
 }
 
-void Server::alloc_server(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+void Server::alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
 
-    buf->base = new char[suggested_size];
-    buf->len = suggested_size;
-}
-
-void Server::alloc_client_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-
-    buf->base = new char[suggested_size];
-    buf->len = suggested_size;
-}
-
-void Server::alloc_server_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-
-    buf->base = new char[suggested_size];
-    buf->len = suggested_size;
+    Server* server = Server::get_instance();
+    msg_buffer* read_v = server->get_read_buffer();
+    *buf = uv_buf_init(read_v->data(), read_v->capacity());
 }
 
 void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *buf) {
 
-  uv_mutex_lock(mutex.get());
   auto connection_cl = open_sessions.find(client);
   Session get_client = connection_cl->second;
   auto connection_sr = server_socket.find(client);
   Session get_server = connection_sr->second;
-  uv_mutex_unlock(mutex.get());
 
   uv_read_stop(
-          reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
+         reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
 
   if (connection_cl != open_sessions.end()) {
     if(len < 0){
         if (len == UV_EOF) {
             std::cout << "\033[1;5;31m" << "Client EOF: "
                       << uv_strerror(len) << "\033[0m\n";
+            remove_proxy_client(reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
 
         } else {
             std::cout << "\033[1;5;31m"
                       << uv_strerror(len) << ": Read client error\n\033[0m";
-          }
+            remove_proxy_client(reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
+        }
     } else if (len > 0) {
             std::cout << "\033[1;5;34mProxy working client\n\033[0m";
 
@@ -105,15 +98,13 @@ void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *bu
 
             error = uv_write(m_server_wreq,
               reinterpret_cast<uv_stream_t *> (get_server.connection.get()),
-                &buf_server, 1, [](uv_write_t *req, int status){
-                  free(req);
-                });
+                &buf_server, 1, nullptr);
 
             if (error == 0) {
                 std::cout << "\033[1;5;34mWrite to server succeed!\n\033[0m";
             } else {
                 std::cout << "\033[1;5;31mWrite to server error: " << uv_strerror(error) << "\033[0m\n";
-
+                remove_proxy(reinterpret_cast<uv_stream_t *> (get_server.connection.get()));
             }
 
         }
@@ -122,11 +113,9 @@ void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *bu
 
 void Server::on_server_read(uv_stream_t *server, ssize_t len, const uv_buf_t *buf) {
 
-  uv_mutex_lock(mutex.get());
   auto connection_pos = open_socket.find(server);
   Session get_server= connection_pos->second;
   auto connection_cl = client_socket.find(server);
-  uv_mutex_unlock(mutex.get());
 
   uv_read_stop(
           reinterpret_cast<uv_stream_t *>(get_server.connection.get()));
@@ -136,29 +125,27 @@ void Server::on_server_read(uv_stream_t *server, ssize_t len, const uv_buf_t *bu
           if (len == UV_EOF) {
                 std::cout << "\033[1;5;31m" << "Server EOF: "
                           << uv_strerror(len) << "\033[0m\n";
-                //open_socket.erase(server);
-
+                remove_proxy(reinterpret_cast<uv_stream_t *> (get_server.connection.get()));
             } else {
                 std::cout << "\033[1;5;31m"
                           << uv_strerror(len) << ": Read server error\n\033[0m";
-                //open_socket.erase(server);
+                remove_proxy(reinterpret_cast<uv_stream_t *> (get_server.connection.get()));
               }
         } else if (len > 0) {
             std::cout << "\033[1;5;34mProxy working server\n\033[0m";
 
             uv_buf_t buf_server = uv_buf_init(buf->base, len);
 
-            uv_write_t * m_client_wreq = (uv_write_t *) malloc(sizeof(uv_write_t));
+            uv_write_t * m_client_wreq = msg.requests.get_new();
 
             error = uv_write(m_client_wreq, connection_cl->second,
-                &buf_server, 1, [](uv_write_t *req, int status){
-                  free(req);
-                });
+                &buf_server, 1, nullptr);
 
             if (error == 0) {
                 std::cout << "\033[1;5;34mWrite to client succeed!\n\033[0m";
             } else {
                 std::cout << "\033[1;5;31mWrite to client error: " << uv_strerror(error) << "\033[0m\n";
+                remove_proxy_client(connection_cl->second);
             }
 
         }
@@ -168,12 +155,13 @@ void Server::on_server_read(uv_stream_t *server, ssize_t len, const uv_buf_t *bu
 void Server::on_server_conn(uv_connect_t *req, int status) {
 
     if (status < 0) {
-        std::cout << "\033[1;5;31m" << "New server connecting error: " << uv_strerror(status) << "\033[0m\n";
+        std::cout << "\033[1;5;31m"
+                << "New server connecting error: "
+                << uv_strerror(status) << "\033[0m\n";
     }
 
     std::cout << "\n\033[1;7;34mPROXY.\n\033[7;0m";
 
-    uv_mutex_lock(mutex.get());
     auto connection_pos = open_socket.find(
                     reinterpret_cast<uv_stream_t*>(req->handle));
 
@@ -181,11 +169,10 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
                     reinterpret_cast<uv_stream_t*>(req->handle));
 
     Session get = connection_pos->second;
-    uv_mutex_unlock(mutex.get());
 
     if (connection_pos != open_socket.end()) {
 
-        error = uv_read_start(connection_cl->second, alloc_client_buffer,
+        error = uv_read_start(connection_cl->second, alloc_buffer,
                               [](uv_stream_t *client, ssize_t len, const uv_buf_t *buf) {
                                   Server::get_instance()->on_client_read(client, len, buf);
                               });
@@ -194,10 +181,10 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
             std::cout << "\033[1;5;34mRead to client start!\n\033[0m";
         } else {
             std::cout << "\033[1;5;31mRead to client error: " << uv_strerror(error) << "\033[0m\n";
-            uv_read_stop(connection_cl->second);
+            remove_proxy_client(connection_cl->second);
         }
 
-        error = uv_read_start(reinterpret_cast<uv_stream_t*>(get.connection.get()), alloc_server_buffer,
+        error = uv_read_start(reinterpret_cast<uv_stream_t*>(get.connection.get()), alloc_buffer,
                               [](uv_stream_t *server, ssize_t len, const uv_buf_t *buf) {
                                   Server::get_instance()->on_server_read(server, len, buf);
                               });
@@ -206,17 +193,17 @@ void Server::on_server_conn(uv_connect_t *req, int status) {
             std::cout << "\033[1;5;34mRead to server start!\n\033[0m";
         } else {
             std::cout << "\033[1;5;31mRead to server: " << uv_strerror(error) << "\033[0m\n";
-            uv_read_stop(
-              reinterpret_cast<uv_stream_t *>(get.connection.get()));
+            remove_proxy(reinterpret_cast<uv_stream_t *> (get.connection.get()));
         }
     }
 }
 
 void Server::proxy_start(uv_stream_t *client) {
 
-    uv_mutex_lock(mutex.get());
     sock_session.connection = std::make_shared<uv_tcp_t>();
-    uv_mutex_unlock(mutex.get());
+    sock_session.activity_timer = std::make_shared<uv_timer_t>();
+
+    uv_timer_init(loop.get(), sock_session.activity_timer.get());
 
     error = uv_tcp_init(loop.get(), sock_session.connection.get());
 
@@ -238,23 +225,33 @@ void Server::proxy_start(uv_stream_t *client) {
         if (error == 0) {
               std::cout << "\033[1;5;34mConnecting to: " <<
                           ip_req << ':' << port << "\033[0m\n";
-              uv_mutex_lock(mutex.get());
               auto *key = reinterpret_cast<uv_stream_t *>(
                       sock_session.connection.get());
 
               open_socket.insert({key, sock_session});
               client_socket.insert({key, client});
               server_socket.insert({client, sock_session});
-              uv_mutex_unlock(mutex.get());
+
+              active_timers_proxy.insert({sock_session.activity_timer.get(), key});
+
+              uv_timer_start(sock_session.activity_timer.get(),
+                             [] (uv_timer_t* handle)
+                             {Server::get_instance()->on_prxoy_timeout(handle);
+                             },TIME, 0);
+
 
           } else {
               std::cout << "\033[1;5;31mConnecting to ip error: "
                         << uv_strerror(error) << "\033[0m\n";
               after_auth_answer[1] = 0x03;
+              remove_proxy(
+                reinterpret_cast<uv_stream_t *>(sock_session.connection.get()));
       }
     } else {
         std::cout << "\033[1;5;31mConnecting to ip error: " << uv_strerror(error) << "\033[0m\n";
         after_auth_answer[1] = 0x03;
+        remove_proxy(
+          reinterpret_cast<uv_stream_t *>(sock_session.connection.get()));
     }
 }
 
@@ -302,10 +299,8 @@ bool Server::s5_parse_req(std::string msg){
 void Server::write_after_auth(
         const std::string &message_second, uv_stream_t *client) {
 
-    uv_mutex_lock(mutex.get());
     auto connection_pos = open_sessions.find(client);
     Session get_client = connection_pos->second;
-    uv_mutex_unlock(mutex.get());
 
     int len = static_cast<int> (message_second.length());
 
@@ -323,27 +318,25 @@ void Server::write_after_auth(
           reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
         ip_req.clear();
     }
-    uv_write_t * m_write_req= (uv_write_t *) malloc(sizeof(uv_write_t));
+    uv_write_t * m_write_req= msg.requests.get_new();
 
     error = uv_write(m_write_req,
       reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
-      &buf, buf_count, [](uv_write_t *req, int status){
-      free(req);
-    });
+      &buf, buf_count, nullptr);
 
     if (error == 0) {
-        std::cout << "\033[1;5;34mSend to client succeed!\033[0m\n";
+        //std::cout << "\033[1;5;34mSend to client succeed!\033[0m\n";
     } else {
         std::cout << "\033[1;5;31mSend to client error: " << uv_strerror(error) << "\033[0m\n";
+        remove_client(
+          reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
     }
 }
 
 void Server::write(const std::string& message_one, uv_stream_t *client) {
 
-    uv_mutex_lock(mutex.get());
     auto connection_pos = open_sessions.find(client);
     Session get_client = connection_pos ->second;
-    uv_mutex_unlock(mutex.get());
 
     int len = static_cast<int> (message_one.length());
 
@@ -356,22 +349,22 @@ void Server::write(const std::string& message_one, uv_stream_t *client) {
 
     int buf_count = 1;
 
-    uv_write_t * m_write_req= (uv_write_t *) malloc(sizeof(uv_write_t));
+    uv_write_t * m_write_req= msg.requests.get_new();
 
     error = uv_write(m_write_req,
       reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
-      &buf, buf_count, [](uv_write_t *req, int status){
-      free(req);
-    });
+      &buf, buf_count, nullptr);
 
     if (error == 0) {
-        std::cout << "\033[1;5;34mSend to client succeed!\n\033[0m";
+        //std::cout << "\033[1;5;34mSend to client succeed!\n\033[0m";
     } else {
         std::cout << "\033[1;5;31mSend to client error: " << uv_strerror(error) << "\033[0m\n";
+        remove_client(
+          reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
     }
 
     error = uv_read_start(reinterpret_cast<uv_stream_t *>(get_client.connection.get()),
-                          alloc_client_buffer,
+                          alloc_buffer,
                           [](uv_stream_t *stream, ssize_t i, const uv_buf_t *buf) {
                               if (i < 0)
                                   std::cout << "\033[1;5;31m" << uv_err_name(i) << ": Read server error\n\033[0m";
@@ -379,24 +372,27 @@ void Server::write(const std::string& message_one, uv_stream_t *client) {
                           });
 
     if (error == 0) {
-        std::cout << "\033[1;5;34mRead to server start!\n\033[0m";
+        //std::cout << "\033[1;5;34mRead to server start!\n\033[0m";
     } else {
         std::cout << "\033[1;5;31mRead to server: " << uv_strerror(error) << "\033[0m\n";
+        remove_client(
+          reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
     }
 }
 
 void Server::second_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
 
-    uv_mutex_lock(mutex.get());
     auto connection_pos = open_sessions.find(client);
     Session get_client = connection_pos ->second;
-    uv_mutex_unlock(mutex.get());
 
     if (connection_pos != open_sessions.end()) {
+        bool reset_timer = true;
         if (i == UV_EOF) {
+            reset_timer = false;
             std::cout << "\033[1;5;31mClient Disconnected\n\033[0m";
-            uv_read_stop(
+            remove_client(
               reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
+
         } else if (i > 0) {
           uv_read_stop(
             reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
@@ -414,22 +410,28 @@ void Server::second_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf
                 Server::write_after_auth(after_auth_answer,
                   reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
             }
+        } else if (reset_timer){
+          uv_timer_start(connection_pos->second.activity_timer.get(),
+                    [] (uv_timer_t* handle){
+                        Server::get_instance()->on_client_timeout(handle);},
+                    TIME,0);
         }
     }
 }
 
 void Server::on_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
 
-    uv_mutex_lock(mutex.get());
     auto connection_pos = open_sessions.find(client);
     Session get_client = connection_pos ->second;
-    uv_mutex_unlock(mutex.get());
 
     if (connection_pos != open_sessions.end()) {
+        bool reset_timer = true;
         if (i == UV_EOF) {
+            reset_timer = false;
             std::cout << "\033[1;5;31mClient Disconnected\n\033[0m";
-            uv_read_stop(
+            remove_client(
               reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
+
         } else if (i > 0) {
             uv_read_stop(
               reinterpret_cast<uv_stream_t *>(get_client.connection.get()));
@@ -442,6 +444,113 @@ void Server::on_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
             } else {
                 std::cout << "\033[1;5;31mUnknown protocol\n\033[0m";
             }
+        } else if (reset_timer){
+          uv_timer_start(connection_pos->second.activity_timer.get(),
+                    [] (uv_timer_t* handle){
+                        Server::get_instance()->on_client_timeout(handle);},
+                    TIME,0);
+        }
+    }
+}
+
+void Server::remove_client(uv_stream_t* client)
+{
+    auto connection_pos = open_sessions.find(client);
+    if (connection_pos != open_sessions.end())
+    {
+        uv_timer_stop(connection_pos->second.activity_timer.get());
+        active_timers.erase(connection_pos->second.activity_timer.get());
+        uv_read_stop(client);
+
+        uv_close((uv_handle_t*)connection_pos->second.connection.get(),
+                 [] (uv_handle_t* handle){
+                Server::get_instance()->on_connection_close_client(handle);});
+    }
+}
+
+void Server::remove_proxy(uv_stream_t* client)
+{
+    auto connection_pos = open_sessions.find(client);
+    if (connection_pos != open_sessions.end())
+    {
+        uv_timer_stop(connection_pos->second.activity_timer.get());
+        active_timers.erase(connection_pos->second.activity_timer.get());
+        uv_read_stop(client);
+
+        uv_close((uv_handle_t*)connection_pos->second.connection.get(),
+                 [] (uv_handle_t* handle){
+                Server::get_instance()->on_connection_close_proxy(handle); });
+    }
+}
+
+void Server::remove_proxy_client(uv_stream_t* client)
+{
+    auto connection_pos = open_sessions.find(client);
+    if (connection_pos != open_sessions.end())
+    {
+        uv_timer_stop(connection_pos->second.activity_timer.get());
+        active_timers.erase(connection_pos->second.activity_timer.get());
+        uv_read_stop(client);
+
+        uv_close((uv_handle_t*)connection_pos->second.connection.get(),
+                 [] (uv_handle_t* handle){
+                Server::get_instance()->on_connection_close_proxy_client(handle);});
+    }
+}
+
+void Server::on_connection_close_client(uv_handle_t* handle)
+{
+    open_sessions.erase((uv_stream_t*)handle);
+}
+
+void Server::on_connection_close_proxy(uv_handle_t* handle)
+{
+    open_sessions.erase((uv_stream_t*)handle);
+}
+
+void Server::on_connection_close_proxy_client(uv_handle_t* handle)
+{
+    open_sessions.erase((uv_stream_t*)handle);
+}
+
+void Server::on_client_timeout(uv_timer_t* handle)
+{
+    auto timer_pos = active_timers.find(handle);
+    if (timer_pos != active_timers.end())
+    {
+        auto connection_pos = open_sessions.find(timer_pos->second);
+        if (connection_pos != open_sessions.end())
+        {
+            Session* s = &(connection_pos->second);
+            remove_client((uv_stream_t*)s->connection.get());
+        }
+    }
+}
+
+void Server::on_prxoy_timeout(uv_timer_t* handle)
+{
+    auto timer_pos = active_timers.find(handle);
+    if (timer_pos != active_timers.end())
+    {
+        auto connection_pos = open_sessions.find(timer_pos->second);
+        if (connection_pos != open_sessions.end())
+        {
+            Session* s = &(connection_pos->second);
+            remove_proxy((uv_stream_t*)s->connection.get());
+        }
+    }
+}
+
+void Server::on_prxoy_client_timeout(uv_timer_t* handle)
+{
+    auto timer_pos = active_timers.find(handle);
+    if (timer_pos != active_timers.end())
+    {
+        auto connection_pos = open_sessions.find(timer_pos->second);
+        if (connection_pos != open_sessions.end())
+        {
+            Session* s = &(connection_pos->second);
+            remove_proxy_client((uv_stream_t*)s->connection.get());
         }
     }
 }
@@ -450,9 +559,8 @@ void Server::on_new_connection(uv_stream_t *server, int status) {
 
     if (status == 0) {
 
-        uv_mutex_lock(mutex.get());
         new_session.connection = std::make_shared<uv_tcp_t>();
-        uv_mutex_unlock(mutex.get());
+        new_session.activity_timer = std::make_shared<uv_timer_t>();
 
         error = uv_tcp_init(loop.get(), new_session.connection.get());
 
@@ -460,26 +568,38 @@ void Server::on_new_connection(uv_stream_t *server, int status) {
           std::cout << "\033[1;5;31m"
                 << uv_strerror(error) << ": INIT ERROR\n\033[0m";
         }
+
+        error = uv_timer_init(loop.get(), new_session.activity_timer.get());
+
+        if(error != 0){
+          std::cout << "\033[1;5;31m"
+                << uv_strerror(error) << ": TIMER ERROR\n\033[0m";
+        }
+
         if (uv_accept(server, reinterpret_cast<uv_stream_t *>(new_session.connection.get())) == 0){
 
             std::cout << "\033[1;5;33m[INFO] \033[1;5;39mNew connection.\n\033[0m";
             error = uv_read_start(reinterpret_cast<uv_stream_t *>(new_session.connection.get()),
-                          alloc_server,
+                          alloc_buffer,
                           [](uv_stream_t *stream, ssize_t i, const uv_buf_t *buf) {
                               if (i < 0) std::cout << "\033[1;5;31m" << uv_err_name(i) << ": FIRST_SERVER_ERROR\n\033[0m";
                               Server::get_instance()->on_msg_recv(stream, i, buf);
                           });
 
             if(error == 0){
-              uv_mutex_lock(mutex.get());
               auto *key = reinterpret_cast<uv_stream_t *>(new_session.connection.get());
               open_sessions.insert({key, new_session});
-              uv_mutex_unlock(mutex.get());
+              active_timers.insert({new_session.activity_timer.get(), key});
+
+              uv_timer_start(new_session.activity_timer.get(),
+                             [] (uv_timer_t* handle){
+                                 Server::get_instance()->on_client_timeout(handle);},
+                             TIME,0);
             } else {
               std::cout << "\033[1;5;31m"
                     << uv_strerror(error) << ": READ ERROR\n\033[0m";
-              uv_read_stop(
-                  reinterpret_cast<uv_stream_t *>(new_session.connection.get()));
+              remove_client(
+                reinterpret_cast<uv_stream_t *>(new_session.connection.get()));
             }
 
         } else {

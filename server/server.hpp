@@ -6,13 +6,46 @@
 #include <unistd.h>
 #include <iostream>
 #include <map>
+#include <vector>
+#include <string>
+#include <memory>
+#include <queue>
+
 #include "session.hpp"
-#include "msg.h"
+
+#define TIME 20000
+#define MAX_BUFF_SIZE 2000000
 
 typedef std::map<uv_stream_t*, Session> session_map_t;
 typedef std::map<uv_stream_t*, Session> socket_map_t_server;
 typedef std::map<uv_stream_t*, uv_stream_t*> socket_map_t_client;
 typedef std::map<uv_stream_t*, Session> socket_map_t_client_server;
+typedef std::map<uv_timer_t*, uv_stream_t*> timer_map_t;
+typedef std::map<uv_timer_t*, uv_stream_t*> timer_map_t_pr;
+typedef std::vector<char> msg_buffer;
+
+
+class req_pool
+{
+public:
+    uv_write_t* get_new() {
+        if (unused.empty()) {
+            used.push(std::move(std::unique_ptr<uv_write_t>(new uv_write_t)));
+        } else {
+            used.push(std::move(std::unique_ptr<uv_write_t>(unused.front().release())));
+            unused.pop();
+        } return used.back().get();
+    }
+protected:
+    std::queue<std::unique_ptr<uv_write_t>>unused;
+    std::queue<std::unique_ptr<uv_write_t>>used;
+};
+
+class msg_pool
+{
+public:
+    req_pool requests;
+};
 
 class Server{
 
@@ -50,11 +83,27 @@ public:
 
     void write_after_auth(const std::string& message_second, uv_stream_t *client);
 
-    static void alloc_client_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+    msg_buffer* get_read_buffer();
 
-    static void alloc_server_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+    static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
 
-    static void alloc_server(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+    void on_prxoy_client_timeout(uv_timer_t* handle);
+
+    void on_prxoy_timeout(uv_timer_t* handle);
+
+    void on_client_timeout(uv_timer_t* handle);
+
+    void on_connection_close_proxy_client(uv_handle_t* handle);
+
+    void on_connection_close_proxy(uv_handle_t* handle);
+
+    void on_connection_close_client(uv_handle_t* handle);
+
+    void remove_proxy_client(uv_stream_t* client);
+
+    void remove_proxy(uv_stream_t* client);
+
+    void remove_client(uv_stream_t* client);
 
 private:
 
@@ -62,7 +111,7 @@ private:
 		{ 0x05, 0x00 };
 
     char after_auth_answer[11] =
-		   { 0x05, 0x00, 0x00, 0x01, 0x00,
+		       { 0x05, 0x00, 0x00, 0x01, 0x00,
           	0x00, 0x00, 0x00, 0x00, 0x00,
           	0x00 };
 
@@ -79,8 +128,6 @@ private:
 
     Session new_session;
 
-    std::unique_ptr<uv_mutex_t> mutex;
-
     session_map_t open_sessions;
     socket_map_t_server open_socket;
     socket_map_t_client client_socket;
@@ -88,5 +135,10 @@ private:
 
     struct sockaddr_in m_addr;
     struct sockaddr_in req_addr;
+
+    msg_buffer read_buffer;
+    msg_pool msg;
+    timer_map_t active_timers;
+    timer_map_t_pr active_timers_proxy;
 };
 #endif //SOCKS5_LIBUV_SERVER_HPP
