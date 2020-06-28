@@ -93,7 +93,9 @@ int main(int argc, char *argv[]) {
 
     try {
         if (argc < 2)
-            logger{} << format("Usage: ", argv[0], " <listen-port>");
+            logger{} << format("Usage: ", argv[0],
+                               "<listen-port>", "<client-number>", "<thread-number>", "<time-value>");
+
         auto port = from_chars<std::uint16_t>(argv[1]);
         if (!port || !*port)
             logger{} << "Port must be in [1;65535]";
