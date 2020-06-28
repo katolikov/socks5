@@ -1,5 +1,5 @@
 #include "spawn.hpp"
-//#include "spawn_new.hpp"
+#include "spawn_new.hpp"
 #include "socks5.hpp"
 
 #include <boost/asio/buffer.hpp>
@@ -11,7 +11,6 @@
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
-//#include <boost/data_time/posix_time/posix_time.hpp>
 
 #include <charconv>
 #include <cstdint>
@@ -109,15 +108,13 @@ int main(int argc, char *argv[]) {
         if (!threads || !*threads)
             logger{} << "Number of threads must be positive";
 
-        auto mode = from_chars<int>(argv[4]);
-        if (mode > 1 || mode < 0)
-            logger{} << "Mode must be in [0;1]\n"
-                        "0 : small size request\n"
-                        "1 : large size request\n";
+        auto time = from_chars<int>(argv[4]);
+        if (!time || !*time)
+            logger{} << "Value of time must be positive";
 
         boost::asio::io_context ctx;
         boost::asio::signal_set stop_signals{ctx, SIGINT, SIGTERM};
-        boost::asio::deadline_timer stop_times{ctx, boost::posix_time::seconds(5)};
+        boost::asio::deadline_timer stop_times{ctx, boost::posix_time::seconds(*time)};
 
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -137,8 +134,7 @@ int main(int argc, char *argv[]) {
         stop_times.async_wait([&, counter](boost::system::error_code ec) {
             if (ec)
                 return;
-            logger{} << "Terminating in response to time.";
-            logger{} << "Counter: " << counter << "\n";
+            logger{} << "Terminating in response to time.\n" << "Counter: " << counter << "\n";
             ctx.stop();
         });
 
@@ -163,9 +159,14 @@ int main(int argc, char *argv[]) {
             boost::system::error_code ec;
             boost::asio::ip::tcp::socket socket_new{make_strand(ctx)};
 
+            /*mtosdadp::spawn(make_strand(ctx),bind_executor(
+                     ctx, [socket = boost::beast::tcp_stream{std::move(socket_new)},
+                             ep, way, request, ec](auto yc) mutable {*/
+
             bccoro::spawn(bind_executor(
                     ctx, [socket = boost::beast::tcp_stream{std::move(socket_new)},
                             ep, way, request, ec](bccoro::yield_context yc) mutable {
+
                         constexpr static std::chrono::seconds timeout{10};
 
                         socket.async_connect(ep, yc[ec]);
@@ -201,7 +202,7 @@ int main(int argc, char *argv[]) {
                         socket.expires_after(timeout);
                         socks5::client::request_second socks_request_second(
                                 socks5::client::request_second::connect, way);
-                        n = socket.async_write_some(socks_request_second.buffers(), yc[ec]);
+                        socket.async_write_some(socks_request_second.buffers(), yc[ec]);
 
                         if (ec) {
                             if (ec != boost::asio::error::operation_aborted)
@@ -212,29 +213,38 @@ int main(int argc, char *argv[]) {
 
                         socket.expires_after(timeout);
                         socks5::client::reply_second socks_reply_second;
-                        n = socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
+                        auto r = socket.async_read_some(socks_reply_second.buffers(), yc[ec]);
 
                         if (ec) {
                             if (ec != boost::asio::error::operation_aborted &&
-                                (ec != boost::asio::error::eof || n))
+                                (ec != boost::asio::error::eof || r))
                                 logger{} << "Second reply error: " << ec.message();
                             return;
                         }
 
+
                         socket.expires_after(timeout);
                         socket.async_write_some(boost::asio::buffer(request), yc[ec]);
 
-                        std::array<char, 4096> response{};
+                        if (ec) {
+                            if (ec != boost::asio::error::operation_aborted)
+                                logger{} << "Failed to write second request: "
+                                         << ec.message();
+                            return;
+                        }
+
+                        std::array<char, 256> response{};
+                        socket.expires_after(timeout);
+
                         while (std::size_t s = socket.async_read_some(boost::asio::buffer(response), yc[ec])) {
                             std::cout.write(response.data(), s);
-
                             if (ec) {
-                                if (ec != boost::asio::error::operation_aborted)
+                                if (ec != boost::asio::error::operation_aborted &&
+                                    (ec != boost::asio::error::eof || s))
                                     logger{} << "Failed to read: " << ec.message();
                                 return;
                             }
                         }
-
                     }));
         }
         std::vector<std::thread> workers;
