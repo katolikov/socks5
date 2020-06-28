@@ -94,7 +94,8 @@ void Server::on_client_read(uv_stream_t *client, ssize_t len, const uv_buf_t *bu
             std::cout << "\033[1;5;34mProxy working client\n\033[0m";
 
             uv_buf_t buf_server = uv_buf_init(buf->base, len);
-            uv_write_t * m_server_wreq = (uv_write_t *) malloc(sizeof(uv_write_t));
+
+            uv_write_t * m_server_wreq = msg.requests.get_new();
 
             error = uv_write(m_server_wreq,
               reinterpret_cast<uv_stream_t *> (get_server.connection.get()),
@@ -118,7 +119,7 @@ void Server::on_server_read(uv_stream_t *server, ssize_t len, const uv_buf_t *bu
   auto connection_cl = client_socket.find(server);
 
   uv_read_stop(
-          reinterpret_cast<uv_stream_t *>(get_server.connection.get()));
+         reinterpret_cast<uv_stream_t *>(get_server.connection.get()));
 
   if (connection_pos != open_socket.end()) {
       if (len < 0) {
@@ -422,7 +423,7 @@ void Server::second_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf
 void Server::on_msg_recv(uv_stream_t *client, ssize_t i, const uv_buf_t *buf) {
 
     auto connection_pos = open_sessions.find(client);
-    Session get_client = connection_pos ->second;
+    Session get_client = connection_pos->second;
 
     if (connection_pos != open_sessions.end()) {
         bool reset_timer = true;
