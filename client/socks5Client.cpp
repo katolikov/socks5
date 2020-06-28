@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
 
                             socks5::client::request_first socks_request_first;
                             socket.expires_after(timeout);
-                            socket.async_write_some(socks_request_first.buffers(), yc[ec]);
+                            async_write(socket, socks_request_first.buffers(), yc[ec]);
 
                             if (ec) {
                                 if (ec != boost::asio::error::operation_aborted)
@@ -202,7 +202,7 @@ int main(int argc, char *argv[]) {
                             socket.expires_after(timeout);
                             socks5::client::request_second socks_request_second(
                                     socks5::client::request_second::connect, way);
-                            socket.async_write_some(socks_request_second.buffers(), yc[ec]);
+                            async_write(socket, socks_request_second.buffers(), yc[ec]);
 
                             if (ec) {
                                 if (ec != boost::asio::error::operation_aborted)
@@ -224,7 +224,7 @@ int main(int argc, char *argv[]) {
 
 
                             socket.expires_after(timeout);
-                            socket.async_write_some(boost::asio::buffer(request), yc[ec]);
+                            async_write(socket, boost::asio::buffer(request), yc[ec]);
 
                             if (ec) {
                                 if (ec != boost::asio::error::operation_aborted)
