@@ -116,9 +116,21 @@ int main(int argc, char *argv[]) {
         boost::asio::signal_set stop_signals{ctx, SIGINT, SIGTERM};
         boost::asio::deadline_timer stop_times{ctx, boost::posix_time::seconds(*time)};
 
-        auto start = std::chrono::high_resolution_clock::now();
-
+        std::string request;
+        request = 'h';
+        request.resize(1048576, 'h');
         double counter = 0;
+
+        //locale ip to connect
+        std::string ip = "127.0.0.1";
+        int port_ip = 8888;
+
+        boost::asio::ip::tcp::endpoint ep{
+                boost::asio::ip::tcp::v4(), *port};
+        boost::asio::ip::tcp::endpoint way(
+                boost::asio::ip::address::from_string(ip), port_ip);
+
+        auto start = std::chrono::high_resolution_clock::now();
 
         stop_signals.async_wait([&, start](boost::system::error_code ec, int /*signal*/) {
             if (ec)
@@ -138,22 +150,6 @@ int main(int argc, char *argv[]) {
             ctx.stop();
         });
 
-        std::string request;
-        request = 'h';
-        //request.resize(1048576, 'h');
-
-        boost::asio::ip::tcp::resolver resolver(ctx);
-
-        //locale ip to connect
-        std::string ip = "127.0.0.1";
-        int port_ip = 8888;
-
-        boost::asio::ip::tcp::endpoint ep{
-                boost::asio::ip::tcp::v4(), *port};
-        boost::asio::ip::tcp::endpoint way(
-                boost::asio::ip::address::from_string(ip), port_ip);
-
-
         for (auto i = 0; i < num; ++i) {
 
             boost::system::error_code ec;
@@ -165,7 +161,7 @@ int main(int argc, char *argv[]) {
 
             bccoro::spawn(bind_executor(
                     ctx, [socket = boost::beast::tcp_stream{std::move(socket_new)},
-                            ep, way, request, ec](bccoro::yield_context yc) mutable {
+                            ep, way, request, ec, i](bccoro::yield_context yc) mutable {
 
                         constexpr static std::chrono::seconds timeout{10};
 
@@ -245,6 +241,9 @@ int main(int argc, char *argv[]) {
                                 return;
                             }
                         }
+
+                        std::cout << i << " - Client\n";
+
                     }));
         }
         std::vector<std::thread> workers;
